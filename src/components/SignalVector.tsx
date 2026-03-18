@@ -4,6 +4,8 @@ import { DemoMode } from '../math/signal';
 interface SignalVectorProps {
   tip: [number, number, number];
   demoMode: DemoMode;
+  /** When true, uses stronger glow and larger tip sphere for quaternionic emphasis. */
+  enhanced?: boolean;
 }
 
 const modeColors: Record<DemoMode, string> = {
@@ -12,25 +14,29 @@ const modeColors: Record<DemoMode, string> = {
   quaternionic: '#f59e0b',
 };
 
-export function SignalVector({ tip, demoMode }: SignalVectorProps) {
+export function SignalVector({ tip, demoMode, enhanced = false }: SignalVectorProps) {
   const color = modeColors[demoMode];
   const [tx, ty, tz] = tip;
   const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
   if (len < 1e-10) return null;
+
+  const tipRadius = enhanced ? 0.09 : 0.06;
+  const emissiveIntensity = enhanced ? 4 : 2;
+  const lineWidth = enhanced ? 4 : 3;
 
   return (
     <group>
       <Line
         points={[[0, 0, 0], tip]}
         color={color}
-        lineWidth={3}
+        lineWidth={lineWidth}
       />
       <mesh position={tip}>
-        <sphereGeometry args={[0.06, 16, 16]} />
+        <sphereGeometry args={[tipRadius, 20, 20]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={2}
+          emissiveIntensity={emissiveIntensity}
         />
       </mesh>
     </group>

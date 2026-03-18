@@ -3,8 +3,10 @@ import { SignalParams, PolarizationMode } from '../math/signal';
 interface ControlPanelProps {
   params: SignalParams;
   animSpeed: number;
+  showClassicalSplit: boolean;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
+  onShowClassicalSplitChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -33,23 +35,42 @@ function Slider({ label, value, min, max, step, onChange }: SliderProps) {
   );
 }
 
-export function ControlPanel({ params, animSpeed, onParamsChange, onAnimSpeedChange }: ControlPanelProps) {
+export function ControlPanel({
+  params,
+  animSpeed,
+  showClassicalSplit,
+  onParamsChange,
+  onAnimSpeedChange,
+  onShowClassicalSplitChange,
+}: ControlPanelProps) {
   return (
     <div className="control-panel">
-      <h4>Signal Parameters</h4>
+      <h4>Geometric State — Signal Parameters</h4>
       <Slider label="Amplitude" value={params.amplitude} min={0.1} max={1.0} step={0.01} onChange={(v) => onParamsChange({ amplitude: v })} />
-      <Slider label="Frequency" value={params.frequency} min={0.1} max={5.0} step={0.1} onChange={(v) => onParamsChange({ frequency: v })} />
-      <Slider label="Ellipticity" value={params.ellipticity} min={0} max={1} step={0.01} onChange={(v) => onParamsChange({ ellipticity: v })} />
+      <Slider label="Phase Evolution" value={animSpeed} min={0} max={3} step={0.05} onChange={onAnimSpeedChange} />
+      <Slider label="Frequency / Rate" value={params.frequency} min={0.1} max={5.0} step={0.1} onChange={(v) => onParamsChange({ frequency: v })} />
+      <Slider label="Polarization Ellipticity" value={params.ellipticity} min={0} max={1} step={0.01} onChange={(v) => onParamsChange({ ellipticity: v })} />
+
       {params.demoMode === 'quaternionic' && (
         <>
-          <Slider label="Orient X" value={params.orientationX} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationX: v })} />
-          <Slider label="Orient Y" value={params.orientationY} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationY: v })} />
-          <Slider label="Orient Z" value={params.orientationZ} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationZ: v })} />
+          <Slider label="Q. Orientation X" value={params.orientationX} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationX: v })} />
+          <Slider label="Q. Orientation Y" value={params.orientationY} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationY: v })} />
+          <Slider label="Q. Orientation Z" value={params.orientationZ} min={-1} max={1} step={0.01} onChange={(v) => onParamsChange({ orientationZ: v })} />
+          <div className="slider-row">
+            <label>Classical Split</label>
+            <button
+              className={`toggle-btn ${showClassicalSplit ? 'active' : ''}`}
+              onClick={() => onShowClassicalSplitChange(!showClassicalSplit)}
+            >
+              {showClassicalSplit ? 'Split ON' : 'Show Classical Split'}
+            </button>
+          </div>
         </>
       )}
+
       {params.demoMode === 'polarized' && (
         <div className="slider-row">
-          <label>Polarization</label>
+          <label>Polarization Geometry</label>
           <select
             value={params.polarization}
             onChange={(e) => onParamsChange({ polarization: e.target.value as PolarizationMode })}
@@ -60,7 +81,6 @@ export function ControlPanel({ params, animSpeed, onParamsChange, onAnimSpeedCha
           </select>
         </div>
       )}
-      <Slider label="Anim Speed" value={animSpeed} min={0} max={3} step={0.05} onChange={onAnimSpeedChange} />
     </div>
   );
 }

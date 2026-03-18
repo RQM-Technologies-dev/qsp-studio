@@ -131,7 +131,7 @@ body {
 .slider-row label {
   font-size: 0.78rem;
   color: var(--text);
-  width: 80px;
+  width: 140px;
   flex-shrink: 0;
 }
 
@@ -212,8 +212,91 @@ body {
   text-shadow: 0 0 8px rgba(0, 212, 255, 0.4);
 }
 
+.info-aha {
+  font-size: 0.72rem;
+  color: var(--amber);
+  line-height: 1.55;
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  font-style: italic;
+}
+
 .info-content p {
   font-size: 0.75rem;
   color: var(--text);
   line-height: 1.5;
+}
+
+/* Status strip — compact numerical readout at bottom of scene */
+.status-strip {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.2rem;
+  padding: 0.3rem 1rem;
+  background: rgba(10, 10, 20, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.status-label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.status-value {
+  font-size: 0.72rem;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-mode {
+  color: var(--amber);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+/* Toggle button — for "Show Classical Split" */
+.toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.25rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.toggle-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.toggle-btn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.1);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
+}
+
+.app-header-left {
+  display: flex;
+  flex-direction: column;
 }
