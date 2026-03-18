@@ -4,15 +4,17 @@ import { AxisFrame } from '../components/AxisFrame';
 import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
 import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
+import { ProjectionPlanes } from '../components/ProjectionPlanes';
 import { SignalParams, computeSignalTip } from '../math/signal';
 
 interface MainSceneProps {
   params: SignalParams;
   currentTime: number;
   showClassicalSplit: boolean;
+  showProjectionPlanes: boolean;
 }
 
-export function MainScene({ params, currentTime, showClassicalSplit }: MainSceneProps) {
+export function MainScene({ params, currentTime, showClassicalSplit, showProjectionPlanes }: MainSceneProps) {
   const tip = computeSignalTip(params, currentTime);
 
   return (
@@ -41,6 +43,10 @@ export function MainScene({ params, currentTime, showClassicalSplit }: MainScene
       />
 
       <AxisFrame />
+
+      {showProjectionPlanes && (
+        <ProjectionPlanes params={params} currentTime={currentTime} />
+      )}
 
       {params.demoMode === 'complex' && (
         <ComplexSignalDemo params={params} currentTime={currentTime} tip={tip} />
