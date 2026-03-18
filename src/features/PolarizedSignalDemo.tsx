@@ -13,12 +13,9 @@ interface PolarizedSignalDemoProps {
 
 export function PolarizedSignalDemo({ params, currentTime, tip }: PolarizedSignalDemoProps) {
   const trail = generateTrail(params, currentTime, 1.0 / params.frequency, 80);
-  const { amplitude, frequency, polarization, ellipticity, demoMode } = params;
   const ellipsePath = useMemo(
     () => generatePolarizationPath(params, 128),
-    // params is used inside but we only re-run when the fields that affect the ellipse shape change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [amplitude, frequency, polarization, ellipticity, demoMode]
+    [params]
   );
 
   return (

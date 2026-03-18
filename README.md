@@ -48,4 +48,5 @@ src/
 
 ## License
 
-MIT
+Proprietary — © 2026 RQM Technologies LLC. All rights reserved.
+See [LICENSE](./LICENSE) for details.
