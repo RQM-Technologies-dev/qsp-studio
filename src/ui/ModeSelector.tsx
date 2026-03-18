@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { DemoMode } from '../math/signal';
 
 interface ModeSelectorProps {
@@ -18,7 +19,7 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
         <button
           key={key}
           className={`mode-btn ${mode === key ? 'active' : ''}`}
-          style={{ '--accent': color } as React.CSSProperties}
+          style={{ '--accent': color } as CSSProperties}
           onClick={() => onChange(key)}
           title={sublabel}
         >
