@@ -6,7 +6,7 @@ export const BUFFER_SIZE = 256;
 
 /**
  * Target wall-clock sample rate in Hz.
- * The RAF loop tries to push one sample per SAMPLE_INTERVAL_MS elapsed.
+ * A setInterval in App.tsx pushes one sample every SAMPLE_INTERVAL_MS.
  * This rate is used when mapping DFT bin indices to physical frequencies.
  */
 export const SAMPLE_RATE_HZ = 60;

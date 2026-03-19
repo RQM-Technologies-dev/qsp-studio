@@ -27,8 +27,10 @@ export const NUM_HARMONICS = 6;
 /**
  * Convert a frequency in Hz to the nearest DFT bin index for a buffer of
  * length N sampled at SAMPLE_RATE_HZ. Guarantees a valid non-negative result.
+ * For N < 2, returns 0 (only the DC bin exists).
  */
 function freqToBin(hz: number, N: number): number {
+  if (N < 2) return 0;
   const maxBin = Math.max(0, Math.floor(N / 2) - 1);
   return Math.max(0, Math.min(Math.round((hz * N) / SAMPLE_RATE_HZ), maxBin));
 }

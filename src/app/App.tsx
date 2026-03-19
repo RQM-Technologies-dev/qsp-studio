@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { MainScene } from '../scenes/MainScene';
 import { ControlPanel } from '../ui/ControlPanel';
 import { ModeSelector } from '../ui/ModeSelector';
@@ -32,7 +33,6 @@ export default function App() {
   const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
   const [showProjectionShadow, setShowProjectionShadow] = useState(false);
 
-  // ── Mode morph state ─────────────────────────────────────────────────────
   const [morphProgress, setMorphProgress] = useState(1);
   const [prevMode, setPrevMode] = useState<DemoMode>(defaultSignalParams.demoMode);
   const morphProgressRef = useRef(1);
@@ -127,12 +127,16 @@ export default function App() {
   }, []);
 
   // ── DFT update — setInterval at ~10 Hz ───────────────────────────────────
-  // Also decoupled from RAF so the spectrum updates at a predictable rate.
+  // flushSync guarantees React commits this state update synchronously,
+  // bypassing the MessageChannel scheduler that can stall in headless/throttled
+  // environments. At 10 Hz the synchronous flush cost is negligible.
   useEffect(() => {
     const id = setInterval(() => {
       const samples = signalBufferRef.current.getAll();
       const result = computeSpectrum(samples, paramsRef.current.frequency);
-      if (result !== null) setSpectrumData(result);
+      if (result !== null) {
+        flushSync(() => setSpectrumData(result));
+      }
     }, DFT_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
