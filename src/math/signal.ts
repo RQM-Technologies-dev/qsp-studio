@@ -18,12 +18,12 @@ export interface SignalParams {
 export const defaultSignalParams: SignalParams = {
   phase: 0,
   amplitude: 0.8,
-  frequency: 1.0,
+  frequency: 0.4,
   orientationX: 0,
   orientationY: 0,
   orientationZ: 1,
   polarization: 'circular',
-  demoMode: 'quaternionic',
+  demoMode: 'complex',
   ellipticity: 0.5,
 };
 

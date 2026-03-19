@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Line, Text } from '@react-three/drei';
 import { SignalParams, DemoMode, computeTheta } from '../math/signal';
-import { WAVE_K, B_FIELD_SCALE } from '../math/receiverBasis';
+import { WAVE_K } from '../math/receiverBasis';
 
 interface IncomingWaveProps {
   params: SignalParams;
@@ -42,21 +42,18 @@ const NUM_POINTS = 90;
  */
 const QUAT_W_PHASE_FACTOR = 1.0;  // w = cos(θ) directly — not an approximation
 
-/** Ring radius lower bound (as fraction of amplitude) when |w| → 0. */
-const RING_MIN_RADIUS_FACTOR = 0.5;
-/** Weight of |w| on top of the lower bound — radius = amplitude × (MIN + W_INFLUENCE × |w|). */
-const RING_W_INFLUENCE = 0.5;
+/** Minimum inner ring radius as a fraction of amplitude when |w| → 0. */
+const INNER_RING_MIN_RADIUS_FACTOR = 0.25;
 
 /** Generate points for the E-field (Y) and B-field (Z) ribbons.
  *
  * The wave is constructed so that at x = contactX the phase equals the shared
- * geometry phase θ (= ωt + φ).  Points further left (earlier positions) carry
- * the correspondingly earlier phase θ − k·(contactX − x), giving a physically
- * correct traveling wave that arrives at the receiver boundary in phase with the
- * geometric tip.
+ * geometry phase θ (= ωt + φ).  Points further left (later phases) carry the
+ * phase θ + k·(contactX − x), giving a physically correct rightward-traveling
+ * wave that approaches the receiver and arrives in phase with the geometric tip.
  *
- * E-field amplitude equals the full geometry amplitude so that the wave crest
- * aligns exactly with the receiver boundary circle / ellipse / sphere.
+ * E-field and B-field amplitudes are equal so the two ribbons are visually
+ * symmetric and both scale with the geometry amplitude.
  */
 function buildWavePoints(
   amplitude: number,
@@ -68,16 +65,17 @@ function buildWavePoints(
 } {
   const ePoints: [number, number, number][] = [];
   const bPoints: [number, number, number][] = [];
-  // E-field amplitude matches geometry radius exactly (Error 1 fix).
+  // E and B amplitudes are equal — both match the geometry radius.
   const eAmp = amplitude;
-  const bAmp = amplitude * B_FIELD_SCALE;
+  const bAmp = amplitude;
 
   for (let i = 0; i <= NUM_POINTS; i++) {
     const t = i / NUM_POINTS;
     const x = WAVE_START_X + t * (contactX - WAVE_START_X);
-    // Shared phase: at x = contactX the wave has phase θ (matching the geometry).
-    // Earlier positions (smaller x) have phase θ − k·(contactX − x).
-    const phase = theta - WAVE_K * (contactX - x);
+    // Rightward-traveling wave: at x = contactX the phase equals θ.
+    // Positions further left (smaller x) carry a later phase because the wave
+    // has not yet reached them — they will oscillate with phase θ in the future.
+    const phase = theta + WAVE_K * (contactX - x);
     // E-field oscillates purely in Y; B-field purely in Z.
     ePoints.push([x, eAmp * Math.sin(phase), 0]);
     bPoints.push([x, 0, bAmp * Math.sin(phase)]);
@@ -219,10 +217,10 @@ function PolarizedTiltCapture({
 /**
  * Quaternionic — hyperspherical boundary capture.
  * Instead of a single contact point the wave meets a full ring living in the
- * YZ plane at the receiver face.  The ring radius tracks |wComponent| — the
- * quaternion scalar — mirroring the dynamic sphere sizing in the
- * HypersphereVisualization reference.  A second inner ring and a central glow
- * complete the "surface / boundary acquisition" feeling.
+ * YZ plane at the receiver face.  The outer ring radius matches the wave
+ * amplitude exactly (same as the Complex circle and Polar ellipse radii) so
+ * the three modes are visually consistent.  An inner ring tracks |wComponent|
+ * to show the dynamic 4-D orientation state.
  */
 function QuaternionicBoundaryCapture({
   waveEndX, amplitude, waveValue, wComponent, opacity,
@@ -230,32 +228,32 @@ function QuaternionicBoundaryCapture({
   waveEndX: number;
   amplitude: number;
   waveValue: number;   // sin of wave phase at face, ∈ [–1, 1]
-  wComponent: number;  // quaternion scalar w, drives ring radius
+  wComponent: number;  // quaternion scalar w, drives inner ring radius
   opacity: number;
 }) {
-  // Ring radius grows linearly with |w| between RING_MIN_RADIUS_FACTOR and 1.0,
-  // mirroring the HypersphereVisualization approach of scaling sphere radii by |cos φ|.
-  // Here w = cos(θ · QUAT_W_PHASE_FACTOR) so |w| plays the same role as |cos φ|.
-  const ringRadius = amplitude * (RING_MIN_RADIUS_FACTOR + RING_W_INFLUENCE * Math.abs(wComponent));
+  // Outer ring fixed at amplitude — matches the incoming wave peak and mirrors
+  // the outer S³ envelope in HyperBoundary (QuaternionicSignalDemo).
+  const outerRadius = amplitude;
+  // Inner ring tracks |w| (like HypersphereVisualization |cos φ|), minimum INNER_RING_MIN_RADIUS_FACTOR.
+  const innerRadius = amplitude * Math.max(INNER_RING_MIN_RADIUS_FACTOR, Math.abs(wComponent));
 
   const outerRing = useMemo<[number, number, number][]>(() => {
     const pts: [number, number, number][] = [];
     for (let i = 0; i <= 48; i++) {
       const a = (i / 48) * 2 * Math.PI;
-      pts.push([waveEndX, ringRadius * Math.cos(a), ringRadius * Math.sin(a)]);
+      pts.push([waveEndX, outerRadius * Math.cos(a), outerRadius * Math.sin(a)]);
     }
     return pts;
-  }, [waveEndX, ringRadius]);
+  }, [waveEndX, outerRadius]);
 
   const innerRing = useMemo<[number, number, number][]>(() => {
-    const r = ringRadius * 0.55;
     const pts: [number, number, number][] = [];
     for (let i = 0; i <= 32; i++) {
       const a = (i / 32) * 2 * Math.PI;
-      pts.push([waveEndX, r * Math.cos(a), r * Math.sin(a)]);
+      pts.push([waveEndX, innerRadius * Math.cos(a), innerRadius * Math.sin(a)]);
     }
     return pts;
-  }, [waveEndX, ringRadius]);
+  }, [waveEndX, innerRadius]);
 
   // Glow intensity pulses with the instantaneous wave amplitude
   const glowFactor = 0.55 + 0.45 * Math.abs(waveValue);
@@ -315,17 +313,16 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
   // and the receiver geometry (computeSignalTip uses the identical formula).
   const theta = computeTheta(params, currentTime);
 
-  // ── Wave termination: the live contact point x-coordinate.
-  // The wave body extends from WAVE_START_X to here; at this point the phase
-  // equals θ exactly, matching the geometry tip.
-  const waveEndX = contactPoint ? contactPoint[0] : receiverX;
+  // ── Wave termination: always the fixed receiver face (waveEndX is constant so
+  // the wave body has a steady length and travels smoothly without sawing).
+  const waveEndX = receiverX;
 
   const { ePoints, bPoints } = buildWavePoints(amplitude, theta, waveEndX);
 
   // ── Field values at the contact point — phase = θ (shared, no spatial offset).
-  // E-field amplitude equals geometry amplitude (Error 1 fix).
   const waveY = amplitude * Math.sin(theta);
-  const waveZ = amplitude * B_FIELD_SCALE * Math.sin(theta);
+  // B-field same amplitude as E-field for visual symmetry (requirement 7).
+  const waveZ = amplitude * Math.sin(theta);
   const waveValueNorm = Math.sin(theta); // ∈ [–1, 1]
 
   // ── Quaternion scalar w = cos(θ) — scalar part of q(t) = cos(θ) + u·sin(θ).
@@ -334,8 +331,8 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
 
   const dotXs: number[] = [-8, -6.5, -5.2, -4.0];
   const labelX = waveEndX - 0.45;
-  const eAmp = amplitude;                    // full geometry amplitude
-  const bAmp = amplitude * B_FIELD_SCALE;
+  const eAmp = amplitude;
+  const bAmp = amplitude;  // same as eAmp — E and B fields have equal amplitude
 
   return (
     <group>
