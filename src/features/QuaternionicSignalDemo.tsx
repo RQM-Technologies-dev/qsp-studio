@@ -48,7 +48,14 @@ interface QuaternionicSignalDemoProps {
   showExcitation?: boolean;
 }
 
-/** Shared helper: compute the current quaternion from signal params + time. */
+/** Shared helper: compute the current quaternion from signal params + time.
+ *
+ * Returns q(t) = cos(θ) + u·sin(θ) — the same unit quaternion used by
+ * computeSignalTip — so that every downstream visual (fiber rings, pulsing halo,
+ * local frame) derives from the identical geometric state.
+ *
+ * Implementation: quatFromAxisAngle(u, 2θ) gives w = cos(θ), xyz = u·sin(θ). ✓
+ */
 function computeCurrentQuat(params: SignalParams, currentTime: number) {
   const theta = 2 * Math.PI * params.frequency * currentTime + params.phase;
   const axis: Vec3 = [params.orientationX, params.orientationY, params.orientationZ];
@@ -56,7 +63,8 @@ function computeCurrentQuat(params: SignalParams, currentTime: number) {
   const normAxis: Vec3 = axisLen > 1e-10
     ? [axis[0] / axisLen, axis[1] / axisLen, axis[2] / axisLen]
     : [0, 0, 1];
-  return { q: quatFromAxisAngle(normAxis, theta * 0.3), theta };
+  // q(t) = cos(θ) + u·sin(θ)  ⟺  quatFromAxisAngle(u, 2θ)
+  return { q: quatFromAxisAngle(normAxis, 2 * theta), theta };
 }
 
 /** Ghost circle showing where the classical complex signal would sit (XY plane only). */

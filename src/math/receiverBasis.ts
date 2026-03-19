@@ -89,16 +89,19 @@ export const E_FIELD_SCALE = 0.5;
 export const B_FIELD_SCALE = 0.32;
 
 /**
- * Compute the traveling-wave phase at the receiver face.
- * Matches the formula used in IncomingWave.tsx so the glyph is synchronized
- * with the visible wave animation.
+ * Phase of the traveling wave at the receiver contact point.
+ *
+ * Under the shared-phase model the wave is constructed so that it arrives with
+ * phase θ = 2π·f·t + φ exactly at the contact point on the receiver boundary.
+ * No spatial correction (k·x) is needed here; that term is only used when
+ * building the wave body at positions *before* the contact point.
  */
 export function computeWavePhaseAtReceiver(
   frequency: number,
   currentTime: number,
   phase: number,
 ): number {
-  return WAVE_K * RECEIVER_X - 2 * Math.PI * frequency * currentTime + phase;
+  return 2 * Math.PI * frequency * currentTime + phase;
 }
 
 /**

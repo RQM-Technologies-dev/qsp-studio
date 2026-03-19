@@ -1,11 +1,9 @@
 import { Line } from '@react-three/drei';
-import { SignalParams, DemoMode } from '../math/signal';
+import { SignalParams, DemoMode, computeTheta } from '../math/signal';
 import {
   computeReceiverBasis,
   projectFieldOntoReceiver,
-  E_FIELD_SCALE,
   B_FIELD_SCALE,
-  WAVE_K,
 } from '../math/receiverBasis';
 import { Vec3 } from '../math/quaternion';
 
@@ -62,10 +60,12 @@ export function SampledFieldGlyph({
   const [px, py, pz] = position;
 
   // ── Incoming field at the contact point ───────────────────────────────
-  // Phase at the contact position x = px using the traveling-wave formula:
-  //   phase = k·x − ω·t + signal_phase
-  const phase = WAVE_K * px - 2 * Math.PI * params.frequency * currentTime + params.phase;
-  const eAmp = params.amplitude * E_FIELD_SCALE;
+  // Shared phase θ = ωt + φ — the same value used by computeSignalTip and the
+  // wave body.  At the contact point the wave phase equals θ by construction,
+  // so no spatial correction (k·x) is needed here.
+  const phase = computeTheta(params, currentTime);
+  // E-field amplitude matches the geometry radius exactly (same as wave body).
+  const eAmp = params.amplitude;
   const bAmp = params.amplitude * B_FIELD_SCALE;
 
   const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];  // E oscillates in Y
