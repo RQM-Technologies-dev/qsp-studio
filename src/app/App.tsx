@@ -43,9 +43,6 @@ export default function App() {
   const [receiverYaw,   setReceiverYaw]   = useState(0);
   const [receiverPitch, setReceiverPitch] = useState(0);
 
-  /** Shared ref written to 1 in the sampling setInterval; read in ReceiverNode useFrame. */
-  const sampleFlashRef = useRef(0);
-
   // ── Field coupling — smoothed scalar [0,1] that drives geometry amplitude ──
   // Raw coupling is computed from orientation + mode; then lerped in the RAF loop
   // to avoid jitter from rapid slider interaction.
@@ -176,8 +173,6 @@ export default function App() {
           currentTimeRef.current,
         ),
       );
-      // Signal sample event — ReceiverNode reads this in its useFrame loop
-      sampleFlashRef.current = 1;
     }, SAMPLE_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
@@ -253,7 +248,6 @@ export default function App() {
           showIncomingWave={showIncomingWave}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
-          sampleFlashRef={sampleFlashRef}
           couplingStrength={couplingStrength}
           morphProgress={morphProgress}
           prevMode={prevMode}

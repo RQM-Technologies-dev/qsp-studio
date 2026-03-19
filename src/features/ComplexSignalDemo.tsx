@@ -23,9 +23,18 @@ interface ComplexSignalDemoProps {
    * to reinforce that poor alignment reduces the encoded signal amplitude.
    */
   couplingStrength?: number;
+  /**
+   * Yaw rotation (radians, around Y-axis) of the sensing frame.
+   * Rotates the entire unit-circle geometry so it visibly acts as the receiving aperture.
+   */
+  receiverYaw?: number;
+  /**
+   * Pitch rotation (radians, around X-axis) of the sensing frame.
+   */
+  receiverPitch?: number;
 }
 
-export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress = 0, opacity = 1, couplingStrength = 1 }: ComplexSignalDemoProps) {
+export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress = 0, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0 }: ComplexSignalDemoProps) {
   const { amplitude } = params;
 
   // Reduce circle/phasor brightness when coupling weakens — minimum 0.55 so geometry
@@ -54,7 +63,7 @@ export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress =
   const imPoint: [number, number, number] = [0, tip[1], 0];
 
   return (
-    <>
+    <group rotation={[receiverPitch, receiverYaw, 0]}>
       {/* Full unit circle outline — I/Q reference plane (the basis manifold) */}
       <Line points={circlePoints} color="#00d4ff" lineWidth={1.8} transparent opacity={0.45 * glowOpacity} />
 
@@ -79,6 +88,6 @@ export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress =
 
       {/* Phasor: the rotating arm from origin to the I/Q unit-circle point */}
       <SignalVector tip={tip} demoMode="complex" opacity={glowOpacity} />
-    </>
+    </group>
   );
 }

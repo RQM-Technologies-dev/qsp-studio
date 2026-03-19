@@ -33,6 +33,15 @@ interface QuaternionicSignalDemoProps {
    * the richer quaternionic structure visibly loses coherence under misalignment.
    */
   couplingStrength?: number;
+  /**
+   * Yaw rotation (radians, around Y-axis) of the sensing frame.
+   * Rotates the entire quaternionic structure so it visibly acts as the receiving basis.
+   */
+  receiverYaw?: number;
+  /**
+   * Pitch rotation (radians, around X-axis) of the sensing frame.
+   */
+  receiverPitch?: number;
 }
 
 /** Shared helper: compute the current quaternion from signal params + time. */
@@ -234,6 +243,7 @@ export function QuaternionicSignalDemo({
   params, currentTime, tip, showClassicalSplit,
   showTrailHistory, showFiber, showLocalFrame,
   showProjectionShadow, opacity = 1, couplingStrength = 1,
+  receiverYaw = 0, receiverPitch = 0,
 }: QuaternionicSignalDemoProps) {
   const trail = generateTrail(params, currentTime, 2.5 / params.frequency, 180);
 
@@ -246,7 +256,7 @@ export function QuaternionicSignalDemo({
   const structureOpacity = opacity * (0.45 + 0.55 * couplingStrength);
 
   return (
-    <>
+    <group rotation={[receiverPitch, receiverYaw, 0]}>
       {showClassicalSplit && <ClassicalSplitGhost params={params} currentTime={currentTime} />}
 
       {/* XY-plane shadow — shows how the quaternionic state projects to a classical orbit */}
@@ -266,6 +276,6 @@ export function QuaternionicSignalDemo({
 
       {/* Local quaternion orientation frame — toggled by showLocalFrame */}
       {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={structureOpacity} />}
-    </>
+    </group>
   );
 }

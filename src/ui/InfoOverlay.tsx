@@ -27,10 +27,10 @@ const modeInfo: Record<DemoMode, {
       'Classical Fourier asks: which planar rotations are present? ' +
       'Each frequency bin is a single complex number — one magnitude, one phase.',
     receptionNote:
-      'Planar phasor size reflects captured field amplitude. ' +
-      'When the receiver is misaligned, the I/Q projection drops — ' +
+      'The unit circle IS the receiving phase frame. ' +
+      'When the frame tilts away from the incoming wave, I/Q coupling drops — ' +
       'the circle shrinks and the phasor shortens visibly. ' +
-      'At broadside (90° off-axis), coupling falls to zero and the phasor collapses. ' +
+      'At broadside (90° off-axis), the planar frame captures nothing and the phasor collapses. ' +
       'This is the most fragile encoding — a single planar projection of a spatial wave.',
   },
   polarized: {
@@ -50,10 +50,10 @@ const modeInfo: Record<DemoMode, {
       'A polarization-aware transform extracts orientation and ellipticity per frequency — ' +
       'richer than complex Fourier, but still one geometric object per bin.',
     receptionNote:
-      'Helix size and trail brightness reflect captured polarized field. ' +
-      'As the receiver tilts away from optimal alignment, the helix radius shrinks ' +
+      'The polarization frame IS the receiving spatial structure. ' +
+      'As the frame tilts away from optimal alignment, the helix radius shrinks ' +
       'and the trail dims — the encoded polarization ellipse contracts. ' +
-      'Spatial structure gives some robustness: coupling degrades more gradually than ' +
+      'Spatial geometry gives some robustness: coupling degrades more gradually than ' +
       'the classical I/Q case, but a severe misalignment still collapses the helix.',
   },
   quaternionic: {
@@ -77,13 +77,13 @@ const modeInfo: Record<DemoMode, {
       'Each coefficient is a full quaternion, not a complex number. ' +
       'One transform extracts what classical methods need three separate analyses to see.',
     receptionNote:
-      'Unified state strength reflects captured multi-axis field coherence. ' +
-      'When coupling weakens, the orbit shrinks, the halo dims, and fiber rings fade — ' +
-      'but the quaternionic receiver uses all three axes simultaneously, so it maintains ' +
+      'The quaternionic structure IS the receiving unified frame. ' +
+      'When the frame tilts, the orbit shrinks, the halo dims, and fiber rings fade — ' +
+      'but the quaternionic geometry uses all three axes simultaneously, so it maintains ' +
       'partial coupling (≥ 57%) even at extreme single-axis misalignment. ' +
       'This robustness is not accidental: richer geometric encoding captures more of the ' +
       'incoming field under imperfect conditions. ' +
-      'Rotate the receiver to see the quaternionic structure degrade more gracefully than ' +
+      'Rotate the sensing frame to see the quaternionic structure degrade more gracefully than ' +
       'the classical phasor.',
   },
 };
@@ -138,15 +138,16 @@ export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayP
             <p className="info-transform">{transformQ}</p>
           )}
 
-          {/* Reception pipeline — shown when incoming wave layer is active */}
+          {/* Direct reception panel — shown when incoming wave layer is active */}
           {showIncomingWave && (
             <div className="info-pipeline">
-              <span className="info-pipeline-label">Reception Pipeline</span>
-              <p className="info-pipeline-flow">EM Wave → Receiver → Field Coupling → Geometric Encoding</p>
+              <span className="info-pipeline-label">Direct Geometric Reception</span>
+              <p className="info-pipeline-flow">Incoming EM Wave → Direct Geometric Reception / Encoding</p>
               <p className="info-pipeline-note">{receptionNote}</p>
               <p className="info-pipeline-coupling">
-                The displayed geometry is the <em>encoded result after reception</em> — not the raw wave.
-                Rotate the receiver to see coupling strength drive the geometry amplitude directly.
+                The geometric structure IS the sensing frame — the incoming field is captured
+                directly into this basis. Rotate the sensing frame to see coupling strength
+                drive the geometry amplitude directly.
               </p>
             </div>
           )}
