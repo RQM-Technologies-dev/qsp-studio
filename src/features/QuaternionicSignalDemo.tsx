@@ -184,18 +184,27 @@ const FIBER_ROTATION_SCALE = 3;
 const BASE_PULSE_RATE = 2.5;
 const W_PULSE_SCALE = 5.0;
 
+/** Sphere geometry subdivisions for the HyperBoundary transparent shells. */
+const SPHERE_WIDTH_SEGMENTS = 28;
+const SPHERE_HEIGHT_SEGMENTS = 16;
+
 /**
- * Faint projected hypersphere boundary — three great-circle-like rings at
- * different orientations centred at the origin of the quaternionic receiving
- * structure.  They evoke the idea that the visible 3D orbit is a projection of
- * a 4D hyperspherical receiving boundary (as in the HypersphereVisualization
- * reference), without literally reproducing that component.
+ * Hypersphere boundary — great-circle rings + dynamic translucent sphere that
+ * visually evoke the 4-D receiving surface, inspired by HypersphereVisualization.
  *
- * Each ring drifts at a different rate driven by |w| — differential rotation
- * across the three great-circle planes encodes the hidden scalar component.
- * Rate factors (1.0, 0.7, 0.5) are chosen so the rings stay visually
- * distinct and never fully synchronise, giving a persistent sense of
- * independent 4D rotation.
+ * Key design decisions (matching the HypersphereVisualization reference):
+ *
+ *  • Outer radius r = amplitude stays constant (the S³ envelope).
+ *  • Inner radius rInner = amplitude × |w|  — tracks the quaternion scalar
+ *    component exactly as the reference visualization scales sphere radii by
+ *    |cos φ|.  This makes the inner shell visibly "breathe" as the receiver
+ *    orientation changes.
+ *  • Three orthogonal great-circle rings (XY, XZ, YZ) rotate at different
+ *    rates driven by |w|, conveying independent 4-D rotational degrees of
+ *    freedom.
+ *  • A faint wireframe-style transparent sphere at rInner anchors the dynamic
+ *    radius in 3-D space so the orientation change is spatially readable.
+ *  • A second, brighter inner ring set at rInner reinforces the dynamic sizing.
  */
 function HyperBoundary({ amplitude, wComponent, currentTime, opacity }: {
   amplitude: number;
@@ -203,52 +212,107 @@ function HyperBoundary({ amplitude, wComponent, currentTime, opacity }: {
   currentTime: number;
   opacity: number;
 }) {
-  // Base drift driven by |w|; each ring gets a different fraction so they
-  // rotate independently and never lock together (1.0 × base, 0.7 ×, 0.5 ×).
+  // Base drift driven by |w|; rate factors chosen so rings stay visually distinct
   const baseDrift = currentTime * Math.abs(wComponent) * 0.4;
+  // Outer (static) radius — the S³ envelope
   const r = amplitude;
+  // Inner (dynamic) radius — tracks |w|, mimicking HypersphereVisualization |cos φ|
+  const rInner = amplitude * Math.max(0.25, Math.abs(wComponent));
 
-  // XY-plane equatorial ring — full drift rate (×1.0)
+  // ── Outer great-circle rings ────────────────────────────────────────────
   const ring1 = useMemo<[number, number, number][]>(() => {
     const pts: [number, number, number][] = [];
-    for (let i = 0; i <= 40; i++) {
-      const a = (i / 40) * 2 * Math.PI + baseDrift;
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI + baseDrift;
       pts.push([r * Math.cos(a), r * Math.sin(a), 0]);
     }
     return pts;
   }, [r, baseDrift]);
 
-  // XZ-plane meridional ring — 70% drift rate so it stays visually distinct
   const ring2 = useMemo<[number, number, number][]>(() => {
     const pts: [number, number, number][] = [];
-    for (let i = 0; i <= 40; i++) {
-      const a = (i / 40) * 2 * Math.PI + baseDrift * 0.7;
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI + baseDrift * 0.7;
       pts.push([r * Math.cos(a), 0, r * Math.sin(a)]);
     }
     return pts;
   }, [r, baseDrift]);
 
-  // YZ-plane lateral ring — 50% drift rate, slowest of the three
   const ring3 = useMemo<[number, number, number][]>(() => {
     const pts: [number, number, number][] = [];
-    for (let i = 0; i <= 40; i++) {
-      const a = (i / 40) * 2 * Math.PI + baseDrift * 0.5;
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI + baseDrift * 0.5;
       pts.push([0, r * Math.cos(a), r * Math.sin(a)]);
     }
     return pts;
   }, [r, baseDrift]);
 
+  // ── Inner dynamic great-circle rings (track rInner) ────────────────────
+  const innerRing1 = useMemo<[number, number, number][]>(() => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 36; i++) {
+      const a = (i / 36) * 2 * Math.PI + baseDrift * 1.3;
+      pts.push([rInner * Math.cos(a), rInner * Math.sin(a), 0]);
+    }
+    return pts;
+  }, [rInner, baseDrift]);
+
+  const innerRing2 = useMemo<[number, number, number][]>(() => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 36; i++) {
+      const a = (i / 36) * 2 * Math.PI + baseDrift * 0.9;
+      pts.push([rInner * Math.cos(a), 0, rInner * Math.sin(a)]);
+    }
+    return pts;
+  }, [rInner, baseDrift]);
+
   return (
     <group>
+      {/* Outer great-circle rings — static envelope, three orientations */}
       {ring1.length >= 2 && (
-        <Line points={ring1} color="#f59e0b" lineWidth={0.6} transparent opacity={0.10 * opacity} />
+        <Line points={ring1} color="#f59e0b" lineWidth={0.8} transparent opacity={0.18 * opacity} />
       )}
       {ring2.length >= 2 && (
-        <Line points={ring2} color="#f59e0b" lineWidth={0.6} transparent opacity={0.08 * opacity} />
+        <Line points={ring2} color="#f59e0b" lineWidth={0.8} transparent opacity={0.14 * opacity} />
       )}
       {ring3.length >= 2 && (
-        <Line points={ring3} color="#f59e0b" lineWidth={0.6} transparent opacity={0.08 * opacity} />
+        <Line points={ring3} color="#f59e0b" lineWidth={0.8} transparent opacity={0.14 * opacity} />
       )}
+
+      {/* Dynamic inner rings — radius tracks |w| (like HypersphereVisualization |cos φ|) */}
+      {innerRing1.length >= 2 && (
+        <Line points={innerRing1} color="#fbbf24" lineWidth={1.2} transparent opacity={0.30 * opacity} />
+      )}
+      {innerRing2.length >= 2 && (
+        <Line points={innerRing2} color="#fbbf24" lineWidth={1.2} transparent opacity={0.25 * opacity} />
+      )}
+
+      {/* Translucent dynamic sphere at rInner — the "breathing" hyperspherical shell.
+          Radius changes with |w| to show the receiver's 4-D orientation state. */}
+      <mesh>
+        <sphereGeometry args={[rInner, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS]} />
+        <meshStandardMaterial
+          color="#f59e0b"
+          emissive="#f59e0b"
+          emissiveIntensity={0.25}
+          transparent
+          opacity={0.045 * opacity}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Faint outer sphere at amplitude — the static S³ envelope */}
+      <mesh>
+        <sphereGeometry args={[r, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS]} />
+        <meshStandardMaterial
+          color="#f59e0b"
+          emissive="#f59e0b"
+          emissiveIntensity={0.08}
+          transparent
+          opacity={0.018 * opacity}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }

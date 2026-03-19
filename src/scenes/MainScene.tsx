@@ -230,6 +230,7 @@ function SceneContent({
             params={params}
             currentTime={currentTime}
             receiverX={0}
+            demoMode={currentMode}
             contactPoint={worldTip}
           />
           {/* Field projection overlay positioned AT the live rim contact point.  */}
