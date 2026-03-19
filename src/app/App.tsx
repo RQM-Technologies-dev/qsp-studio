@@ -5,6 +5,7 @@ import { ModeSelector } from '../ui/ModeSelector';
 import { InfoOverlay } from '../ui/InfoOverlay';
 import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
+import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 
 export default function App() {
@@ -14,6 +15,13 @@ export default function App() {
   const [showClassicalSplit, setShowClassicalSplit] = useState(false);
   const [showProjectionPlanes, setShowProjectionPlanes] = useState(false);
   const [sweepMode, setSweepMode] = useState<SweepMode>('none');
+
+  // ── Layer visibility toggles ────────────────────────────────────────────
+  const [showBasis, setShowBasis] = useState(true);
+  const [showTrailHistory, setShowTrailHistory] = useState(true);
+  const [showFiber, setShowFiber] = useState(true);
+  const [showLocalFrame, setShowLocalFrame] = useState(true);
+  const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
 
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number | null>(null);
@@ -36,12 +44,10 @@ export default function App() {
 
     const mode = sweepModeRef.current;
 
-    // Advance phase unless geometry-only sweep is active
     if (mode !== 'geometry-only') {
       setCurrentTime((t) => t + dt * animSpeedRef.current);
     }
 
-    // In geometry-only sweep: slowly precess the orientation axis while phase stays fixed
     if (mode === 'geometry-only') {
       geometryAngleRef.current += dt * 0.55;
       const a = geometryAngleRef.current;
@@ -75,12 +81,10 @@ export default function App() {
 
   const handleSweepModeChange = (mode: SweepMode) => {
     setSweepMode(mode);
-    // Entering either sweep mode forces quaternionic
     if (mode !== 'none') {
       setParams((prev) => ({ ...prev, demoMode: 'quaternionic' }));
       setShowClassicalSplit(false);
     }
-    // Reset geometry angle when starting geometry sweep
     if (mode === 'geometry-only') {
       geometryAngleRef.current = 0;
     }
@@ -106,8 +110,15 @@ export default function App() {
           currentTime={currentTime}
           showClassicalSplit={showClassicalSplit}
           showProjectionPlanes={showProjectionPlanes}
+          showBasis={showBasis}
+          showTrailHistory={showTrailHistory}
+          showFiber={showFiber}
+          showLocalFrame={showLocalFrame}
         />
         <InfoOverlay demoMode={params.demoMode} />
+        {showSpectrumPanel && (
+          <SpectrumPanel params={params} currentTime={currentTime} />
+        )}
         <StatusStrip params={params} currentTime={currentTime} animSpeed={animSpeed} sweepMode={sweepMode} />
       </div>
       <ControlPanel
@@ -115,11 +126,21 @@ export default function App() {
         animSpeed={animSpeed}
         showClassicalSplit={showClassicalSplit}
         showProjectionPlanes={showProjectionPlanes}
+        showBasis={showBasis}
+        showTrailHistory={showTrailHistory}
+        showFiber={showFiber}
+        showLocalFrame={showLocalFrame}
+        showSpectrumPanel={showSpectrumPanel}
         sweepMode={sweepMode}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
         onShowClassicalSplitChange={setShowClassicalSplit}
         onShowProjectionPlanesChange={setShowProjectionPlanes}
+        onShowBasisChange={setShowBasis}
+        onShowTrailHistoryChange={setShowTrailHistory}
+        onShowFiberChange={setShowFiber}
+        onShowLocalFrameChange={setShowLocalFrame}
+        onShowSpectrumPanelChange={setShowSpectrumPanel}
       />
     </div>
   );

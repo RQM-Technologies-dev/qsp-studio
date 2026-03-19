@@ -103,14 +103,22 @@ body {
   height: 100% !important;
 }
 
+/* ── Control panel — compact instrument console ─────────────────────────── */
 .control-panel {
-  padding: 0.75rem 1.2rem;
   background: var(--surface);
   border-top: 1px solid var(--border);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
-  max-height: 220px;
   overflow-y: auto;
+  max-height: 230px;
+  /* Horizontal flex so sections sit side-by-side on wide screens */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.8rem;
+  padding: 0.6rem 1.5rem;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .control-panel h4 {
@@ -131,12 +139,14 @@ body {
 .slider-row label {
   font-size: 0.78rem;
   color: var(--text);
-  width: 140px;
+  width: 130px;
   flex-shrink: 0;
 }
 
 .slider-row input[type="range"] {
   flex: 1;
+  min-width: 0;
+  max-width: max(110px, 20vw);
   accent-color: var(--cyan);
   cursor: pointer;
 }
@@ -219,6 +229,83 @@ body {
   margin-bottom: 0.7rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  font-style: italic;
+}
+
+.info-basis {
+  font-size: 0.72rem;
+  color: var(--cyan);
+  font-style: italic;
+  margin-bottom: 0.45rem;
+  opacity: 0.8;
+}
+
+.info-components {
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  background: rgba(0, 212, 255, 0.05);
+  border-left: 2px solid rgba(0, 212, 255, 0.25);
+  border-radius: 0 3px 3px 0;
+}
+
+.info-components-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.info-components ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.info-components li {
+  font-size: 0.72rem;
+  color: var(--text);
+  padding: 0.08rem 0;
+  opacity: 0.85;
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.info-components li::before {
+  content: '·  ';
+  color: var(--cyan);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.info-expand-btn {
+  display: block;
+  margin-top: 0.55rem;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+
+.info-expand-btn:hover {
+  color: var(--cyan);
+}
+
+.info-transform {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  line-height: 1.55;
+  padding: 0.4rem 0.5rem;
+  background: rgba(139, 92, 246, 0.07);
+  border-left: 2px solid rgba(139, 92, 246, 0.35);
+  border-radius: 0 3px 3px 0;
   font-style: italic;
 }
 
@@ -388,8 +475,11 @@ body {
 
 /* ── Control panel sections ─────────────────────────────────────────────── */
 .control-section {
-  margin-bottom: 0.6rem;
-  padding-bottom: 0.5rem;
+  /* Fixed compact width per section — prevents sliders from spanning full screen */
+  width: 280px;
+  flex-shrink: 0;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
   border-bottom: 1px solid rgba(0, 212, 255, 0.07);
 }
 
@@ -410,4 +500,111 @@ body {
   color: var(--amber);
   font-size: 0.65rem;
   letter-spacing: 0.06em;
+}
+
+/* ── Spectrum / coefficient panel ───────────────────────────────────────── */
+.spectrum-panel {
+  position: absolute;
+  bottom: 3.2rem;         /* sit above the status strip */
+  left: 1rem;
+  width: 220px;
+  background: rgba(10, 10, 22, 0.88);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 6px;
+  backdrop-filter: blur(12px);
+  padding: 0.55rem 0.7rem 0.5rem;
+  pointer-events: none;
+  user-select: none;
+}
+
+.spectrum-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.spectrum-title {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.spectrum-mode-label {
+  font-size: 0.66rem;
+  color: var(--cyan);
+  opacity: 0.75;
+  letter-spacing: 0.03em;
+}
+
+.spectrum-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 72px;
+}
+
+.spectrum-bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.spectrum-bar-track {
+  flex: 1;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 2px;
+  display: flex;
+  align-items: flex-end;
+  min-height: 48px;
+  overflow: hidden;
+}
+
+.spectrum-bar-fill {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.05s linear;
+  min-height: 2px;
+}
+
+.spectrum-bar-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.03em;
+  text-align: center;
+  line-height: 1.2;
+  margin-top: 0.15rem;
+}
+
+.spectrum-bar-value {
+  font-size: 0.58rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.spectrum-note {
+  margin-top: 0.45rem;
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.35rem;
+}
+
+/* ── Info overlay component list: label + note side by side ─────────────── */
+.info-comp-label {
+  font-weight: 600;
+  margin-right: 0.35rem;
+  color: var(--cyan);
+  opacity: 0.85;
+}
+
+.info-comp-note {
+  color: var(--text-dim);
+  font-size: 0.68rem;
 }

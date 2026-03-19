@@ -1,32 +1,65 @@
-import { Canvas } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, Grid } from '@react-three/drei';
+import { Vector3 } from 'three';
 import { AxisFrame } from '../components/AxisFrame';
 import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
 import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
-import { SignalParams, computeSignalTip } from '../math/signal';
+import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
 
 interface MainSceneProps {
   params: SignalParams;
   currentTime: number;
   showClassicalSplit: boolean;
   showProjectionPlanes: boolean;
+  showBasis: boolean;
+  showTrailHistory: boolean;
+  showFiber: boolean;
+  showLocalFrame: boolean;
 }
 
-export function MainScene({ params, currentTime, showClassicalSplit, showProjectionPlanes }: MainSceneProps) {
+/** Target camera positions per mode — emphasise the conceptual geometry of each. */
+const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
+  complex:      [0, 0.3, 5.5],
+  polarized:    [4.0, 2.2, 4.0],
+  quaternionic: [3.2, 2.8, 4.5],
+};
+
+/** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
+const CAMERA_LERP_SPEED = 0.04;
+
+/** Smoothly lerps the camera toward the per-mode target position. */
+function CameraController({ demoMode }: { demoMode: DemoMode }) {
+  const { camera } = useThree();
+  const targetRef = useRef<Vector3>(new Vector3(...MODE_CAMERA[demoMode]));
+
+  useEffect(() => {
+    targetRef.current.set(...MODE_CAMERA[demoMode]);
+  }, [demoMode]);
+
+  useFrame(() => {
+    camera.position.lerp(targetRef.current, CAMERA_LERP_SPEED);
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
+}
+
+function SceneContent({
+  params, currentTime, showClassicalSplit, showProjectionPlanes,
+  showBasis, showTrailHistory, showFiber, showLocalFrame,
+}: MainSceneProps) {
   const tip = computeSignalTip(params, currentTime);
 
   return (
-    <Canvas
-      camera={{ position: [3, 2, 4], fov: 50 }}
-      style={{ background: '#0a0a0f' }}
-    >
-      <ambientLight intensity={0.3} />
-      <pointLight position={[5, 5, 5]} intensity={1} />
-      <Stars radius={50} depth={10} count={3000} factor={3} fade />
+    <>
+      <ambientLight intensity={0.25} />
+      <pointLight position={[5, 5, 5]} intensity={0.9} />
 
-      {/* Faint reference plane to anchor spatial reasoning */}
+      <Stars radius={80} depth={25} count={1200} factor={1.8} saturation={0} fade />
+
       <Grid
         args={[8, 8]}
         position={[0, 0, 0]}
@@ -49,10 +82,21 @@ export function MainScene({ params, currentTime, showClassicalSplit, showProject
       )}
 
       {params.demoMode === 'complex' && (
-        <ComplexSignalDemo params={params} currentTime={currentTime} tip={tip} />
+        <ComplexSignalDemo
+          params={params}
+          currentTime={currentTime}
+          tip={tip}
+          showBasis={showBasis}
+        />
       )}
       {params.demoMode === 'polarized' && (
-        <PolarizedSignalDemo params={params} currentTime={currentTime} tip={tip} />
+        <PolarizedSignalDemo
+          params={params}
+          currentTime={currentTime}
+          tip={tip}
+          showBasis={showBasis}
+          showTrailHistory={showTrailHistory}
+        />
       )}
       {params.demoMode === 'quaternionic' && (
         <QuaternionicSignalDemo
@@ -60,10 +104,25 @@ export function MainScene({ params, currentTime, showClassicalSplit, showProject
           currentTime={currentTime}
           tip={tip}
           showClassicalSplit={showClassicalSplit}
+          showTrailHistory={showTrailHistory}
+          showFiber={showFiber}
+          showLocalFrame={showLocalFrame}
         />
       )}
 
+      <CameraController demoMode={params.demoMode} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.05} />
+    </>
+  );
+}
+
+export function MainScene(props: MainSceneProps) {
+  return (
+    <Canvas
+      camera={{ position: MODE_CAMERA[props.params.demoMode], fov: 50 }}
+      style={{ background: '#0a0a0f' }}
+    >
+      <SceneContent {...props} />
     </Canvas>
   );
 }
