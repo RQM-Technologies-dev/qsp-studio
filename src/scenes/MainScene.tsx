@@ -229,8 +229,10 @@ function SceneContent({
       {/* Signal and receiver geometry are co-located at the same moving point.   */}
       {showIncomingWave && (
         <>
+          {/* Wave and glyph both receive effectiveParams (coupling-scaled amplitude)
+              so the wave amplitude is always identical to the geometry amplitude. */}
           <IncomingWave
-            params={params}
+            params={effectiveParams}
             currentTime={currentTime}
             receiverX={0}
             demoMode={currentMode}
@@ -239,7 +241,7 @@ function SceneContent({
           {/* Field projection overlay positioned AT the live rim contact point.  */}
           {/* All glyph visuals radiate from and collapse back to the rim point.  */}
           <SampledFieldGlyph
-            params={params}
+            params={effectiveParams}
             currentTime={currentTime}
             position={worldTip}
             demoMode={currentMode}

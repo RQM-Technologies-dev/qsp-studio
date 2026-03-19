@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Line, Text } from '@react-three/drei';
-import { SignalParams, DemoMode } from '../math/signal';
-import { WAVE_K, E_FIELD_SCALE, B_FIELD_SCALE } from '../math/receiverBasis';
+import { SignalParams, DemoMode, computeTheta } from '../math/signal';
+import { WAVE_K, B_FIELD_SCALE } from '../math/receiverBasis';
 
 interface IncomingWaveProps {
   params: SignalParams;
@@ -34,19 +34,13 @@ const WAVE_START_X = -8.5;
 const NUM_POINTS = 90;
 
 /**
- * Phase offset so that at x = 0 (receiver face) the wave is in-phase with the
- * receiver tip:
- *   wave at x=0 → sin(–ωt + π) = sin(ωt)  ✓ matches tip angle ωt.
+ * Quaternion scalar component w = cos(θ), derived from q(t) = cos(θ) + u·sin(θ).
+ *
+ * This matches computeCurrentQuat in QuaternionicSignalDemo which uses
+ * quatFromAxisAngle(u, 2θ) → w = cos(θ).  The factor 1.0 is explicit so it is
+ * clear there is no independent scaling: the wave maps directly into θ.
  */
-const PHASE_ALIGN = Math.PI;
-
-/**
- * The quaternion scalar w = cos(θ_rot / 2) where θ_rot = θ · QUAT_AXIS_ANGLE_SCALE
- * (see computeCurrentQuat in QuaternionicSignalDemo).  Halving that gives the
- * half-angle factor used for w: w = cos(θ · QUAT_AXIS_ANGLE_SCALE / 2).
- */
-const QUAT_AXIS_ANGLE_SCALE = 0.3;            // matches quatFromAxisAngle(…, θ·0.3) in QuaternionicSignalDemo
-const QUAT_W_PHASE_FACTOR = QUAT_AXIS_ANGLE_SCALE / 2; // = 0.15 — produces cos(θ·0.15) = w
+const QUAT_W_PHASE_FACTOR = 1.0;  // w = cos(θ) directly — not an approximation
 
 /** Ring radius lower bound (as fraction of amplitude) when |w| → 0. */
 const RING_MIN_RADIUS_FACTOR = 0.5;
@@ -54,28 +48,37 @@ const RING_MIN_RADIUS_FACTOR = 0.5;
 const RING_W_INFLUENCE = 0.5;
 
 /** Generate points for the E-field (Y) and B-field (Z) ribbons.
- *  The wave always ends at the fixed receiver face (waveEndX) with no spatial
- *  deformation — the sinusoidal shape is preserved to the very last sample. */
+ *
+ * The wave is constructed so that at x = contactX the phase equals the shared
+ * geometry phase θ (= ωt + φ).  Points further left (earlier positions) carry
+ * the correspondingly earlier phase θ − k·(contactX − x), giving a physically
+ * correct traveling wave that arrives at the receiver boundary in phase with the
+ * geometric tip.
+ *
+ * E-field amplitude equals the full geometry amplitude so that the wave crest
+ * aligns exactly with the receiver boundary circle / ellipse / sphere.
+ */
 function buildWavePoints(
   amplitude: number,
-  frequency: number,
-  currentTime: number,
-  waveEndX: number,
+  theta: number,
+  contactX: number,
 ): {
   ePoints: [number, number, number][];
   bPoints: [number, number, number][];
 } {
   const ePoints: [number, number, number][] = [];
   const bPoints: [number, number, number][] = [];
-  const eAmp = amplitude * E_FIELD_SCALE;
+  // E-field amplitude matches geometry radius exactly (Error 1 fix).
+  const eAmp = amplitude;
   const bAmp = amplitude * B_FIELD_SCALE;
 
   for (let i = 0; i <= NUM_POINTS; i++) {
     const t = i / NUM_POINTS;
-    const x = WAVE_START_X + t * (waveEndX - WAVE_START_X);
-    // Traveling wave with phase alignment: at x=0 the wave is in-phase with the receiver tip
-    const phase = WAVE_K * x - 2 * Math.PI * frequency * currentTime + PHASE_ALIGN;
-    // E-field oscillates purely in Y; B-field purely in Z — no spatial deformation
+    const x = WAVE_START_X + t * (contactX - WAVE_START_X);
+    // Shared phase: at x = contactX the wave has phase θ (matching the geometry).
+    // Earlier positions (smaller x) have phase θ − k·(contactX − x).
+    const phase = theta - WAVE_K * (contactX - x);
+    // E-field oscillates purely in Y; B-field purely in Z.
     ePoints.push([x, eAmp * Math.sin(phase), 0]);
     bPoints.push([x, 0, bAmp * Math.sin(phase)]);
   }
@@ -294,38 +297,44 @@ function QuaternionicBoundaryCapture({
  * Traveling electromagnetic wave approaching the receiver from the left.
  *
  * Shows:
- * - E-field (cyan):  sinusoidal ribbon in the XY plane
+ * - E-field (cyan):  sinusoidal ribbon in the XY plane — amplitude = geometry amplitude
  * - B-field (rose):  sinusoidal ribbon in the XZ plane
  * - Propagation axis: faint backbone with directional dots
- * - Mode-specific boundary capture overlay at the receiver face
+ * - Mode-specific boundary capture overlay at the live contact point
  *
- * The wave is drawn as a pure traveling wave (no spatial deformation) all the
- * way to the fixed receiver face.  Phase is offset by π so the wave crest
- * arriving at x = 0 is in-phase with the receiver tip.
+ * The wave terminates at the live contact point (x = contactPoint[0]) rather
+ * than a fixed face, so the wave body meets the geometry boundary exactly.
+ * The phase at the terminus equals the shared phase θ, ensuring the wave and
+ * geometry are two parameterizations of the same evolving state.
  */
 export function IncomingWave({ params, currentTime, receiverX, demoMode, contactPoint, opacity = 1 }: IncomingWaveProps) {
-  const { amplitude, frequency } = params;
+  const { amplitude } = params;
   const mode = demoMode ?? params.demoMode;
 
-  // Wave always ends at the fixed receiver face (no stretching to the rotating tip)
-  const waveEndX = receiverX;
+  // ── Shared phase θ = ωt + φ — single source of truth for both the wave
+  // and the receiver geometry (computeSignalTip uses the identical formula).
+  const theta = computeTheta(params, currentTime);
 
-  const { ePoints, bPoints } = buildWavePoints(amplitude, frequency, currentTime, waveEndX);
+  // ── Wave termination: the live contact point x-coordinate.
+  // The wave body extends from WAVE_START_X to here; at this point the phase
+  // equals θ exactly, matching the geometry tip.
+  const waveEndX = contactPoint ? contactPoint[0] : receiverX;
 
-  // Wave field values at the receiver face — used by arrival overlays
-  const phaseAtFace = WAVE_K * waveEndX - 2 * Math.PI * frequency * currentTime + PHASE_ALIGN;
-  const waveY = amplitude * E_FIELD_SCALE * Math.sin(phaseAtFace);
-  const waveZ = amplitude * B_FIELD_SCALE * Math.sin(phaseAtFace);
-  const waveValueNorm = Math.sin(phaseAtFace); // ∈ [–1, 1]
+  const { ePoints, bPoints } = buildWavePoints(amplitude, theta, waveEndX);
 
-  // Quaternion scalar w = cos(θ · QUAT_W_PHASE_FACTOR) — consistent with
-  // computeCurrentQuat in QuaternionicSignalDemo (quatFromAxisAngle uses θ·0.3, so w=cos(θ·0.15))
-  const theta = 2 * Math.PI * frequency * currentTime + params.phase;
+  // ── Field values at the contact point — phase = θ (shared, no spatial offset).
+  // E-field amplitude equals geometry amplitude (Error 1 fix).
+  const waveY = amplitude * Math.sin(theta);
+  const waveZ = amplitude * B_FIELD_SCALE * Math.sin(theta);
+  const waveValueNorm = Math.sin(theta); // ∈ [–1, 1]
+
+  // ── Quaternion scalar w = cos(θ) — scalar part of q(t) = cos(θ) + u·sin(θ).
+  // Matches the w computed in QuaternionicSignalDemo via quatFromAxisAngle(u, 2θ).
   const wComponent = Math.cos(theta * QUAT_W_PHASE_FACTOR);
 
   const dotXs: number[] = [-8, -6.5, -5.2, -4.0];
   const labelX = waveEndX - 0.45;
-  const eAmp = amplitude * E_FIELD_SCALE;
+  const eAmp = amplitude;                    // full geometry amplitude
   const bAmp = amplitude * B_FIELD_SCALE;
 
   return (
