@@ -37,7 +37,7 @@ export default function App() {
   const [showLocalFrame, setShowLocalFrame] = useState(true);
   const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
   const [showProjectionShadow, setShowProjectionShadow] = useState(false);
-  const [showIncomingWave, setShowIncomingWave] = useState(false);
+  const [showIncomingWave, setShowIncomingWave] = useState(true);
 
   // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
   const [receiverYaw,   setReceiverYaw]   = useState(0);
