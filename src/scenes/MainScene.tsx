@@ -6,6 +6,10 @@ import { AxisFrame } from '../components/AxisFrame';
 import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
 import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
+import { IncomingWave } from '../features/IncomingWave';
+import { ReceiverNode } from '../features/ReceiverNode';
+import { ReceptionLink } from '../features/ReceptionLink';
+import { SampledFieldGlyph } from '../features/SampledFieldGlyph';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
 import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
 
@@ -19,6 +23,7 @@ interface MainSceneProps {
   showFiber: boolean;
   showLocalFrame: boolean;
   showProjectionShadow: boolean;
+  showIncomingWave: boolean;
   /** 0 = transition just started, 1 = fully transitioned. */
   morphProgress: number;
   /** The mode we are transitioning away from. */
@@ -31,6 +36,12 @@ const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
   polarized:    [4.0, 2.2, 4.0],
   quaternionic: [3.2, 2.8, 4.5],
 };
+
+/** Position of the receiver node — left of the origin, perpendicular to the incoming wave. */
+const RECEIVER_POSITION: [number, number, number] = [-2.8, 0, 0];
+
+/** X-coordinate where the incoming wave terminates (at the receiver face). */
+const RECEIVER_X = RECEIVER_POSITION[0];
 
 /** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
 const CAMERA_LERP_SPEED = 0.06;
@@ -65,7 +76,7 @@ function CameraController({ demoMode, morphProgress }: { demoMode: DemoMode; mor
 function SceneContent({
   params, currentTime, showClassicalSplit, showProjectionPlanes,
   showBasis, showTrailHistory, showFiber, showLocalFrame,
-  showProjectionShadow, morphProgress, prevMode,
+  showProjectionShadow, showIncomingWave, morphProgress, prevMode,
 }: MainSceneProps) {
   const tip = computeSignalTip(params, currentTime);
   const currentMode = params.demoMode;
@@ -186,6 +197,30 @@ function SceneContent({
           showProjectionShadow={showProjectionShadow}
           opacity={isTransitioning ? inOpacity : 1}
         />
+      )}
+
+      {/* ── Incoming wave reception layer — toggled by showIncomingWave ───── */}
+      {showIncomingWave && (
+        <>
+          <IncomingWave
+            params={params}
+            currentTime={currentTime}
+            receiverX={RECEIVER_X}
+          />
+          <ReceiverNode position={RECEIVER_POSITION} />
+          <ReceptionLink
+            receiverPos={RECEIVER_POSITION}
+            targetPos={[0, 0, 0]}
+            demoMode={currentMode}
+            currentTime={currentTime}
+          />
+          <SampledFieldGlyph
+            params={params}
+            currentTime={currentTime}
+            position={RECEIVER_POSITION}
+            demoMode={currentMode}
+          />
+        </>
       )}
 
       <CameraController demoMode={params.demoMode} morphProgress={morphProgress} />

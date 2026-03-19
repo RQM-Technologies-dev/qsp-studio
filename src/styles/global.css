@@ -697,3 +697,37 @@ body {
   color: var(--text-dim);
   font-size: 0.68rem;
 }
+
+/* ── Reception pipeline section (shown when incoming wave is active) ──────── */
+.info-pipeline {
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  background: rgba(0, 212, 255, 0.04);
+  border-left: 2px solid rgba(0, 212, 255, 0.3);
+  border-radius: 0 3px 3px 0;
+}
+
+.info-pipeline-label {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.25rem;
+}
+
+.info-pipeline-flow {
+  font-size: 0.74rem;
+  color: var(--cyan);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.3rem;
+}
+
+.info-pipeline-note {
+  font-size: 0.7rem;
+  color: var(--text);
+  line-height: 1.5;
+  font-style: italic;
+  opacity: 0.85;
+}

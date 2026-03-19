@@ -8,6 +8,7 @@ const modeInfo: Record<DemoMode, {
   body: string;
   components: { label: string; note: string }[];
   transformQ: string;
+  receptionNote: string;
 }> = {
   complex: {
     title: 'Classical Complex View — Planar Rotation',
@@ -25,6 +26,10 @@ const modeInfo: Record<DemoMode, {
     transformQ:
       'Classical Fourier asks: which planar rotations are present? ' +
       'Each frequency bin is a single complex number — one magnitude, one phase.',
+    receptionNote:
+      'Planar encoding of the received oscillation. ' +
+      'The receiver projects the arriving field onto two orthogonal axes — ' +
+      'in-phase (I) and quadrature (Q) — collapsing the spatial wave into a rotating phasor.',
   },
   polarized: {
     title: 'Polarization Geometry — Spatial Oscillation',
@@ -42,6 +47,10 @@ const modeInfo: Record<DemoMode, {
     transformQ:
       'A polarization-aware transform extracts orientation and ellipticity per frequency — ' +
       'richer than complex Fourier, but still one geometric object per bin.',
+    receptionNote:
+      'Spatial encoding of field orientation. ' +
+      'The receiver resolves the E-field vector at each instant, ' +
+      'tracing out the polarization ellipse — shape and orientation both encoded.',
   },
   quaternionic: {
     title: 'Quaternionic Unified View — Unified Geometric State',
@@ -63,6 +72,10 @@ const modeInfo: Record<DemoMode, {
       'including phase, orientation, and polarization structure together? ' +
       'Each coefficient is a full quaternion, not a complex number. ' +
       'One transform extracts what classical methods need three separate analyses to see.',
+    receptionNote:
+      'Unified encoding of phase, polarization, and orientation. ' +
+      'The receiver extracts all four components simultaneously — ' +
+      'the arriving wave becomes one coherent quaternionic state, not three separate measurements.',
   },
 };
 
@@ -72,12 +85,13 @@ const AHA_SENTENCE =
 
 interface InfoOverlayProps {
   demoMode: DemoMode;
+  showIncomingWave?: boolean;
 }
 
-export function InfoOverlay({ demoMode }: InfoOverlayProps) {
+export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayProps) {
   const [open, setOpen] = useState(true);
   const [showTransform, setShowTransform] = useState(false);
-  const { title, basis, body, components, transformQ } = modeInfo[demoMode];
+  const { title, basis, body, components, transformQ, receptionNote } = modeInfo[demoMode];
 
   return (
     <div className={`info-overlay ${open ? 'open' : 'closed'}`}>
@@ -113,6 +127,15 @@ export function InfoOverlay({ demoMode }: InfoOverlayProps) {
           </button>
           {showTransform && (
             <p className="info-transform">{transformQ}</p>
+          )}
+
+          {/* Reception pipeline — shown when incoming wave layer is active */}
+          {showIncomingWave && (
+            <div className="info-pipeline">
+              <span className="info-pipeline-label">Reception Pipeline</span>
+              <p className="info-pipeline-flow">EM Wave → Receiver → Geometric Encoding</p>
+              <p className="info-pipeline-note">{receptionNote}</p>
+            </div>
           )}
         </div>
       )}

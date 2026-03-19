@@ -12,6 +12,7 @@ interface ControlPanelProps {
   showLocalFrame: boolean;
   showSpectrumPanel: boolean;
   showProjectionShadow: boolean;
+  showIncomingWave: boolean;
   sweepMode: SweepMode;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
@@ -23,6 +24,7 @@ interface ControlPanelProps {
   onShowLocalFrameChange: (v: boolean) => void;
   onShowSpectrumPanelChange: (v: boolean) => void;
   onShowProjectionShadowChange: (v: boolean) => void;
+  onShowIncomingWaveChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -93,6 +95,7 @@ export function ControlPanel({
   showLocalFrame,
   showSpectrumPanel,
   showProjectionShadow,
+  showIncomingWave,
   sweepMode,
   onParamsChange,
   onAnimSpeedChange,
@@ -104,6 +107,7 @@ export function ControlPanel({
   onShowLocalFrameChange,
   onShowSpectrumPanelChange,
   onShowProjectionShadowChange,
+  onShowIncomingWaveChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
@@ -210,6 +214,12 @@ export function ControlPanel({
           active={showSpectrumPanel}
           onToggle={() => onShowSpectrumPanelChange(!showSpectrumPanel)}
           title="Show the coefficient / spectrum panel"
+        />
+        <LayerToggle
+          label="Incoming Wave"
+          active={showIncomingWave}
+          onToggle={() => onShowIncomingWaveChange(!showIncomingWave)}
+          title="Show the incoming electromagnetic wave arriving at the receiver, and how it is encoded into the current geometric representation"
         />
       </div>
     </div>

@@ -32,6 +32,7 @@ export default function App() {
   const [showLocalFrame, setShowLocalFrame] = useState(true);
   const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
   const [showProjectionShadow, setShowProjectionShadow] = useState(false);
+  const [showIncomingWave, setShowIncomingWave] = useState(false);
 
   const [morphProgress, setMorphProgress] = useState(1);
   const [prevMode, setPrevMode] = useState<DemoMode>(defaultSignalParams.demoMode);
@@ -194,10 +195,11 @@ export default function App() {
           showFiber={showFiber}
           showLocalFrame={showLocalFrame}
           showProjectionShadow={showProjectionShadow}
+          showIncomingWave={showIncomingWave}
           morphProgress={morphProgress}
           prevMode={prevMode}
         />
-        <InfoOverlay demoMode={params.demoMode} />
+        <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
           <SpectrumPanel params={params} spectrumData={spectrumData} />
         )}
@@ -214,6 +216,7 @@ export default function App() {
         showLocalFrame={showLocalFrame}
         showSpectrumPanel={showSpectrumPanel}
         showProjectionShadow={showProjectionShadow}
+        showIncomingWave={showIncomingWave}
         sweepMode={sweepMode}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
@@ -225,6 +228,7 @@ export default function App() {
         onShowLocalFrameChange={setShowLocalFrame}
         onShowSpectrumPanelChange={setShowSpectrumPanel}
         onShowProjectionShadowChange={setShowProjectionShadow}
+        onShowIncomingWaveChange={setShowIncomingWave}
       />
     </div>
   );
