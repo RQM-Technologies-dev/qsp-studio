@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { SignalParams, DemoMode } from '../math/signal';
 import { SpectrumData, MIN_DFT_SAMPLES } from '../math/dft';
 import { BUFFER_SIZE } from '../math/signalBuffer';
@@ -77,12 +78,26 @@ interface SpectrumPanelProps {
   spectrumData: SpectrumData | null;
 }
 
+/** Duration of the per-sample spectrum flash in ms. Must match spectrumPulse CSS animation. */
+const SPECTRUM_FLASH_MS = 90;
+
 export function SpectrumPanel({ params, spectrumData }: SpectrumPanelProps) {
   const mode = params.demoMode;
 
   const bars: SpectrumBar[] = spectrumData ? buildBars(mode, spectrumData) : [];
   const bufferFill = spectrumData?.bufferFill ?? 0;
   const isCollecting = bufferFill < MIN_DFT_SAMPLES;
+
+  // ── Sample-flash: briefly highlight bars each time the spectrum updates (≈10 Hz)
+  const [isFlashing, setIsFlashing] = useState(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!spectrumData) return;
+    setIsFlashing(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setIsFlashing(false), SPECTRUM_FLASH_MS);
+    return () => { if (flashTimerRef.current) clearTimeout(flashTimerRef.current); };
+  }, [spectrumData]);
 
   // Labels for the bottom note
   let note: string;
@@ -129,7 +144,7 @@ export function SpectrumPanel({ params, spectrumData }: SpectrumPanelProps) {
       </div>
 
       {/* ── Bars ──────────────────────────────────────────────────────────── */}
-      <div className="spectrum-bars" style={{ minHeight: 72 }}>
+      <div className={`spectrum-bars${isFlashing ? ' spectrum-flash' : ''}`} style={{ minHeight: 72 }}>
         {isCollecting ? (
           <div className="spectrum-collecting">
             <div

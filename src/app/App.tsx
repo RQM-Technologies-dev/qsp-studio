@@ -34,6 +34,13 @@ export default function App() {
   const [showProjectionShadow, setShowProjectionShadow] = useState(false);
   const [showIncomingWave, setShowIncomingWave] = useState(false);
 
+  // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
+  const [receiverYaw,   setReceiverYaw]   = useState(0);
+  const [receiverPitch, setReceiverPitch] = useState(0);
+
+  /** Shared ref written to 1 in the sampling setInterval; read in ReceiverNode useFrame. */
+  const sampleFlashRef = useRef(0);
+
   const [morphProgress, setMorphProgress] = useState(1);
   const [prevMode, setPrevMode] = useState<DemoMode>(defaultSignalParams.demoMode);
   const morphProgressRef = useRef(1);
@@ -123,6 +130,8 @@ export default function App() {
       signalBufferRef.current.push(
         sampleSignal(paramsRef.current, currentTimeRef.current),
       );
+      // Signal sample event — ReceiverNode reads this in its useFrame loop
+      sampleFlashRef.current = 1;
     }, SAMPLE_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
@@ -196,6 +205,9 @@ export default function App() {
           showLocalFrame={showLocalFrame}
           showProjectionShadow={showProjectionShadow}
           showIncomingWave={showIncomingWave}
+          receiverYaw={receiverYaw}
+          receiverPitch={receiverPitch}
+          sampleFlashRef={sampleFlashRef}
           morphProgress={morphProgress}
           prevMode={prevMode}
         />
@@ -217,6 +229,8 @@ export default function App() {
         showSpectrumPanel={showSpectrumPanel}
         showProjectionShadow={showProjectionShadow}
         showIncomingWave={showIncomingWave}
+        receiverYaw={receiverYaw}
+        receiverPitch={receiverPitch}
         sweepMode={sweepMode}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
@@ -229,6 +243,8 @@ export default function App() {
         onShowSpectrumPanelChange={setShowSpectrumPanel}
         onShowProjectionShadowChange={setShowProjectionShadow}
         onShowIncomingWaveChange={setShowIncomingWave}
+        onReceiverYawChange={setReceiverYaw}
+        onReceiverPitchChange={setReceiverPitch}
       />
     </div>
   );

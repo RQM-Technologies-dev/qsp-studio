@@ -698,6 +698,18 @@ body {
   font-size: 0.68rem;
 }
 
+/* ── Spectrum sample flash — briefly highlights bars on each DFT update ────── */
+/* Duration (0.09s) must stay in sync with SPECTRUM_FLASH_MS in SpectrumPanel.tsx */
+@keyframes spectrumPulse {
+  0%   { box-shadow: 0 0 6px rgba(0, 212, 255, 0.45); }
+  100% { box-shadow: none; }
+}
+
+.spectrum-flash {
+  border-radius: 2px;
+  animation: spectrumPulse 0.09s ease-out forwards;
+}
+
 /* ── Reception pipeline section (shown when incoming wave is active) ──────── */
 .info-pipeline {
   margin-top: 0.6rem;

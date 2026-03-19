@@ -1,152 +1,186 @@
 import { Line } from '@react-three/drei';
-import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
+import { SignalParams, DemoMode } from '../math/signal';
+import {
+  computeReceiverBasis,
+  projectFieldOntoReceiver,
+  computeWavePhaseAtReceiver,
+} from '../math/receiverBasis';
+import { Vec3 } from '../math/quaternion';
 
 interface SampledFieldGlyphProps {
-  params:      SignalParams;
-  currentTime: number;
-  position:    [number, number, number];
-  demoMode:    DemoMode;
-  opacity?:    number;
+  params:       SignalParams;
+  currentTime:  number;
+  position:     [number, number, number];
+  demoMode:     DemoMode;
+  receiverYaw?: number;
+  receiverPitch?: number;
+  opacity?:     number;
 }
 
-/** Scale down from scene units to a compact glyph so it doesn't crowd the receiver. */
-const GLYPH_SCALE = 0.38;
+/** Scale from field units to compact glyph size. */
+const GLYPH_SCALE = 0.46;
+
+/** Dot product of two Vec3. */
+const dot3 = (a: Vec3, b: Vec3) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 
 /**
- * Tiny mode-aware field indicator displayed at the receiver, bridging:
- *   physical wave in space → local measurement → abstract representation
+ * Tiny mode-aware field readout at the receiver.
  *
- * - Complex  mode: shows I (Re) and Q (Im) components of the sampled phasor
- * - Polarized mode: shows the raw E-field (cyan) and B-field (rose) vectors
- * - Quaternionic: shows the three i/j/k local basis axes
+ * Shows:
+ * 1. The incoming E-field vector (translucent white) at the receiver position.
+ * 2. The receiver's I-axis (j_r, red) and Q-axis (k_r, green) in world space.
+ * 3. The projected component arrows along each axis (brighter, coloured).
+ * 4. Faint projection lines connecting the E-field tip to each projected point.
+ *
+ * Rotating the receiver via yaw/pitch changes which components are extracted,
+ * making the encoding physically frame-dependent.
  */
 export function SampledFieldGlyph({
   params,
   currentTime,
   position,
   demoMode,
+  receiverYaw   = 0,
+  receiverPitch = 0,
   opacity = 1,
 }: SampledFieldGlyphProps) {
   const [px, py, pz] = position;
 
-  if (demoMode === 'complex') {
-    // Sample the I/Q phasor at current time
-    const tip = computeSignalTip({ ...params, demoMode: 'complex' }, currentTime);
-    const ix: [number, number, number] = [px + tip[0] * GLYPH_SCALE, py, pz];
-    const qy: [number, number, number] = [px, py + tip[1] * GLYPH_SCALE, pz];
-    const scaled: [number, number, number] = [
-      px + tip[0] * GLYPH_SCALE,
-      py + tip[1] * GLYPH_SCALE,
-      pz,
-    ];
+  // ── Incoming field at receiver position ────────────────────────────────
+  const phase = computeWavePhaseAtReceiver(params.frequency, currentTime, params.phase);
+  const eAmp = params.amplitude * 0.5;   // matches IncomingWave eAmp
+  const bAmp = params.amplitude * 0.32;  // matches IncomingWave bAmp
 
-    return (
-      <group>
-        {/* I component — red */}
-        <Line
-          points={[[px, py, pz], ix]}
-          color="#ff5566"
-          lineWidth={2}
-          transparent
-          opacity={0.75 * opacity}
-        />
-        {/* Q component — green */}
-        <Line
-          points={[[px, py, pz], qy]}
-          color="#44ee88"
-          lineWidth={2}
-          transparent
-          opacity={0.75 * opacity}
-        />
-        {/* Phasor tip dot */}
-        <mesh position={scaled}>
-          <sphereGeometry args={[0.026, 8, 8]} />
-          <meshStandardMaterial
-            color="#00d4ff"
-            emissive="#00d4ff"
-            emissiveIntensity={2}
-            transparent
-            opacity={0.9 * opacity}
-          />
-        </mesh>
-      </group>
-    );
-  }
+  const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];           // E oscillates in Y
+  const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];           // B oscillates in Z
 
-  if (demoMode === 'polarized') {
-    // Raw sinusoidal E and B field vectors at the receiver
-    const theta = 2 * Math.PI * params.frequency * currentTime + params.phase;
-    const ey = params.amplitude * Math.sin(theta);
-    const bz = params.amplitude * 0.6 * Math.sin(theta);
+  // ── Receiver local basis in world space ────────────────────────────────
+  const basis = computeReceiverBasis(receiverYaw, receiverPitch);
+  const { jAxis, kAxis } = basis;
 
-    const eTip: [number, number, number] = [px, py + ey * GLYPH_SCALE, pz];
-    const bTip: [number, number, number] = [px, py, pz + bz * GLYPH_SCALE];
+  // ── Project field onto receiver axes ──────────────────────────────────
+  const proj = projectFieldOntoReceiver(eField, bField, basis);
 
-    return (
-      <group>
-        {/* E-field vector — cyan */}
-        <Line
-          points={[[px, py, pz], eTip]}
-          color="#00d4ff"
-          lineWidth={2}
-          transparent
-          opacity={0.75 * opacity}
-        />
-        {/* B-field vector — rose */}
-        <Line
-          points={[[px, py, pz], bTip]}
-          color="#ff44aa"
-          lineWidth={1.5}
-          transparent
-          opacity={0.65 * opacity}
-        />
-        {/* E-tip dot */}
-        <mesh position={eTip}>
-          <sphereGeometry args={[0.022, 8, 8]} />
-          <meshStandardMaterial
-            color="#00d4ff"
-            emissive="#00d4ff"
-            emissiveIntensity={2}
-            transparent
-            opacity={0.9 * opacity}
-          />
-        </mesh>
-      </group>
-    );
-  }
+  // Sampled I-channel: E projection onto j_r (plus B component for full EM)
+  const I_sampled = proj.jE + proj.jB;
+  // Sampled Q-channel: E projection onto k_r + B component
+  const Q_sampled = proj.kE + proj.kB;
 
-  // Quaternionic mode — show the three local basis axes (i, j, k) at the receiver
-  const s = GLYPH_SCALE * 0.82;
-  const iDot: [number, number, number] = [px + s, py, pz];
-  const jDot: [number, number, number] = [px, py + s, pz];
-  const kDot: [number, number, number] = [px, py, pz + s];
+  // ── World-space points ─────────────────────────────────────────────────
+  const origin: [number, number, number] = [px, py, pz];
+
+  // Incoming E-field tip (world space)
+  const eTip: [number, number, number] = [
+    px + eField[0] * GLYPH_SCALE,
+    py + eField[1] * GLYPH_SCALE,
+    pz + eField[2] * GLYPH_SCALE,
+  ];
+
+  // Projected I point: along j_r axis with I_sampled magnitude
+  const iPt: [number, number, number] = [
+    px + jAxis[0] * I_sampled * GLYPH_SCALE,
+    py + jAxis[1] * I_sampled * GLYPH_SCALE,
+    pz + jAxis[2] * I_sampled * GLYPH_SCALE,
+  ];
+
+  // Projected Q point: along k_r axis with Q_sampled magnitude
+  const qPt: [number, number, number] = [
+    px + kAxis[0] * Q_sampled * GLYPH_SCALE,
+    py + kAxis[1] * Q_sampled * GLYPH_SCALE,
+    pz + kAxis[2] * Q_sampled * GLYPH_SCALE,
+  ];
+
+  // Axis endpoints (fixed length, orientation-dependent)
+  const axisLen = GLYPH_SCALE * 1.05;
+  const jEnd: [number, number, number] = [
+    px + jAxis[0] * axisLen, py + jAxis[1] * axisLen, pz + jAxis[2] * axisLen,
+  ];
+  const kEnd: [number, number, number] = [
+    px + kAxis[0] * axisLen, py + kAxis[1] * axisLen, pz + kAxis[2] * axisLen,
+  ];
+
+  // ── Mode-specific extra: B-field contribution for polarized ───────────
+  const bTip: [number, number, number] = [
+    px + bField[0] * GLYPH_SCALE,
+    py + bField[1] * GLYPH_SCALE,
+    pz + bField[2] * GLYPH_SCALE,
+  ];
+
+  // Quaternionic: also show the forward (i_r) axis sampled from total field
+  const { iAxis } = basis;
+  const totalField: Vec3 = [
+    eField[0] + bField[0],
+    eField[1] + bField[1],
+    eField[2] + bField[2],
+  ];
+  const W_sampled = dot3(totalField, iAxis);
+  const wPt: [number, number, number] = [
+    px + iAxis[0] * W_sampled * GLYPH_SCALE,
+    py + iAxis[1] * W_sampled * GLYPH_SCALE,
+    pz + iAxis[2] * W_sampled * GLYPH_SCALE,
+  ];
+  const iEnd: [number, number, number] = [
+    px + iAxis[0] * axisLen, py + iAxis[1] * axisLen, pz + iAxis[2] * axisLen,
+  ];
 
   return (
     <group>
-      <Line
-        points={[[px, py, pz], iDot]}
-        color="#ff6688"
-        lineWidth={2}
-        transparent
-        opacity={0.75 * opacity}
-      />
-      <Line
-        points={[[px, py, pz], jDot]}
-        color="#55ee88"
-        lineWidth={2}
-        transparent
-        opacity={0.75 * opacity}
-      />
-      <Line
-        points={[[px, py, pz], kDot]}
-        color="#5588ff"
-        lineWidth={2}
-        transparent
-        opacity={0.75 * opacity}
-      />
+      {/* ── Incoming field vectors (world space, behind axes so subtler) ── */}
+      {/* E-field — translucent white */}
+      <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.28 * opacity} />
+      <mesh position={eTip}>
+        <sphereGeometry args={[0.018, 6, 6]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1} transparent opacity={0.35 * opacity} />
+      </mesh>
+
+      {/* B-field — shown in polarized + quaternionic modes */}
+      {demoMode !== 'complex' && (
+        <Line points={[origin, bTip]} color="#ff44aa" lineWidth={1} transparent opacity={0.22 * opacity} />
+      )}
+
+      {/* ── Receiver sensing axes (ghost, shows orientation) ─────────────── */}
+      {/* I-axis direction (j_r) — faint red */}
+      <Line points={[origin, jEnd]} color="#ff5566" lineWidth={0.8} transparent opacity={0.25 * opacity} />
+      {/* Q-axis direction (k_r) — faint green */}
+      <Line points={[origin, kEnd]} color="#44ee88" lineWidth={0.8} transparent opacity={0.25 * opacity} />
+      {demoMode === 'quaternionic' && (
+        /* Forward axis (i_r) — faint blue */
+        <Line points={[origin, iEnd]} color="#5588ff" lineWidth={0.8} transparent opacity={0.25 * opacity} />
+      )}
+
+      {/* ── Faint projection lines: field tip → projected point ────────── */}
+      <Line points={[eTip, iPt]} color="#ff5566" lineWidth={0.7} transparent opacity={0.22 * opacity} />
+      <Line points={[eTip, qPt]} color="#44ee88" lineWidth={0.7} transparent opacity={0.22 * opacity} />
+
+      {/* ── Projected component arrows (bright — this is the "sampled" data) */}
+      {/* I-channel */}
+      <Line points={[origin, iPt]} color="#ff5566" lineWidth={2.2} transparent opacity={0.82 * opacity} />
+      <mesh position={iPt}>
+        <sphereGeometry args={[0.028, 8, 8]} />
+        <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
+      </mesh>
+
+      {/* Q-channel */}
+      <Line points={[origin, qPt]} color="#44ee88" lineWidth={2.2} transparent opacity={0.82 * opacity} />
+      <mesh position={qPt}>
+        <sphereGeometry args={[0.028, 8, 8]} />
+        <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
+      </mesh>
+
+      {/* Quaternionic: forward-axis (w-like) component */}
+      {demoMode === 'quaternionic' && (
+        <>
+          <Line points={[origin, wPt]} color="#5588ff" lineWidth={2.2} transparent opacity={0.82 * opacity} />
+          <mesh position={wPt}>
+            <sphereGeometry args={[0.028, 8, 8]} />
+            <meshStandardMaterial color="#5588ff" emissive="#5588ff" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
+          </mesh>
+        </>
+      )}
+
       {/* Central origin dot */}
-      <mesh position={[px, py, pz]}>
-        <sphereGeometry args={[0.026, 8, 8]} />
+      <mesh position={origin}>
+        <sphereGeometry args={[0.024, 8, 8]} />
         <meshStandardMaterial
           color="#f59e0b"
           emissive="#f59e0b"
@@ -158,3 +192,4 @@ export function SampledFieldGlyph({
     </group>
   );
 }
+

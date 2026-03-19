@@ -13,6 +13,8 @@ interface ControlPanelProps {
   showSpectrumPanel: boolean;
   showProjectionShadow: boolean;
   showIncomingWave: boolean;
+  receiverYaw: number;
+  receiverPitch: number;
   sweepMode: SweepMode;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
@@ -25,6 +27,8 @@ interface ControlPanelProps {
   onShowSpectrumPanelChange: (v: boolean) => void;
   onShowProjectionShadowChange: (v: boolean) => void;
   onShowIncomingWaveChange: (v: boolean) => void;
+  onReceiverYawChange: (v: number) => void;
+  onReceiverPitchChange: (v: number) => void;
 }
 
 interface SliderProps {
@@ -96,6 +100,8 @@ export function ControlPanel({
   showSpectrumPanel,
   showProjectionShadow,
   showIncomingWave,
+  receiverYaw,
+  receiverPitch,
   sweepMode,
   onParamsChange,
   onAnimSpeedChange,
@@ -108,6 +114,8 @@ export function ControlPanel({
   onShowSpectrumPanelChange,
   onShowProjectionShadowChange,
   onShowIncomingWaveChange,
+  onReceiverYawChange,
+  onReceiverPitchChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
@@ -222,6 +230,29 @@ export function ControlPanel({
           title="Show the incoming electromagnetic wave arriving at the receiver, and how it is encoded into the current geometric representation"
         />
       </div>
+
+      {/* ── Receiver Orientation — shown only when the incoming wave layer is active ── */}
+      {showIncomingWave && (
+        <div className="control-section">
+          <h4>Receiver Orientation</h4>
+          <Slider
+            label="Yaw (°)"
+            value={Math.round(receiverYaw * (180 / Math.PI))}
+            min={-90}
+            max={90}
+            step={1}
+            onChange={(v) => onReceiverYawChange(v * (Math.PI / 180))}
+          />
+          <Slider
+            label="Pitch (°)"
+            value={Math.round(receiverPitch * (180 / Math.PI))}
+            min={-90}
+            max={90}
+            step={1}
+            onChange={(v) => onReceiverPitchChange(v * (Math.PI / 180))}
+          />
+        </div>
+      )}
     </div>
   );
 }
