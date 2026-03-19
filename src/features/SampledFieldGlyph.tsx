@@ -1,16 +1,22 @@
 import { Line } from '@react-three/drei';
-import { SignalParams, DemoMode, computeSignalTip } from '../math/signal';
+import { SignalParams, DemoMode } from '../math/signal';
 import {
   computeReceiverBasis,
   projectFieldOntoReceiver,
   E_FIELD_SCALE,
   B_FIELD_SCALE,
+  WAVE_K,
 } from '../math/receiverBasis';
-import { Vec3, rotateVec3ByQuat } from '../math/quaternion';
+import { Vec3 } from '../math/quaternion';
 
 interface SampledFieldGlyphProps {
   params:            SignalParams;
   currentTime:       number;
+  /**
+   * World-space position of the live circumference/trace contact point.
+   * The glyph is now centred HERE so all field vectors and projections
+   * radiate from the active rim, not from the geometry centre.
+   */
   position:          [number, number, number];
   demoMode:          DemoMode;
   receiverYaw?:      number;
@@ -30,16 +36,18 @@ const GLYPH_SCALE = 0.46;
  * Mode-specific wave-basis contact visual.
  *
  * Shows how the incoming EM wave resolves directly into each mode's geometric
- * sensing basis at the point of contact (the main geometry origin).
+ * sensing basis AT THE LIVE CIRCUMFERENCE CONTACT POINT.
+ *
+ * The component is positioned at the world-space live rim/trace point
+ * (supplied by the parent via the `position` prop) so that origin = contact.
  *
  * Classical  — E resolves onto the unit circle's Re (I) and Im (Q) axes.
- *              A glowing contact dot on the circle rim shows where the field lands.
+ *              A hero contact dot glows at the live circle-rim position.
  * Polarized  — E resolves onto the minor b-axis; B onto the normal n̂-axis.
- *              A contact dot marks the current ellipse-tip position.
+ *              A hero contact dot glows at the current ellipse-tip position.
  * Quaternionic — E and B each resolve into their respective quaternionic-basis
- *              channels. An amber absorption glow marks unified reception.
- *
- * Keeps projection lines subtle and elegant — colours match each mode's geometry.
+ *              channels. A hero contact dot + faint boundary rings mark
+ *              the projected hyperspherical receiving boundary point.
  */
 export function SampledFieldGlyph({
   params,
@@ -53,11 +61,10 @@ export function SampledFieldGlyph({
 }: SampledFieldGlyphProps) {
   const [px, py, pz] = position;
 
-  // ── Incoming field at origin (x = 0) ──────────────────────────────────
-  // Traveling wave: phase = k·x − ω·t + signal_phase.
-  // At x=0: k·0 = 0, leaving −2π·f·t + signal_phase.
-  // The negative sign reflects propagation in the +X direction.
-  const phase = -2 * Math.PI * params.frequency * currentTime + params.phase;
+  // ── Incoming field at the contact point ───────────────────────────────
+  // Phase at the contact position x = px using the traveling-wave formula:
+  //   phase = k·x − ω·t + signal_phase
+  const phase = WAVE_K * px - 2 * Math.PI * params.frequency * currentTime + params.phase;
   const eAmp = params.amplitude * E_FIELD_SCALE;
   const bAmp = params.amplitude * B_FIELD_SCALE;
 
@@ -65,16 +72,14 @@ export function SampledFieldGlyph({
   const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];  // B oscillates in Z
 
   // ── Sensing basis — same rotation as the demo group ───────────────────
-  // iAxis = rotated X (forward / Re axis)
-  // jAxis = rotated Y (I-channel / Im / minor axis)
-  // kAxis = rotated Z (Q-channel / normal axis)
   const basis = computeReceiverBasis(receiverYaw, receiverPitch);
   const { iAxis, jAxis, kAxis } = basis;
 
   // ── Project fields onto sensing axes ──────────────────────────────────
   const proj = projectFieldOntoReceiver(eField, bField, basis);
 
-  // ── World-space geometry points ────────────────────────────────────────
+  // ── World-space geometry points — all relative to the live contact point ─
+  // `origin` IS the contact point on the live circumference / trace.
   const origin: [number, number, number] = [px, py, pz];
 
   const eTip: [number, number, number] = [
@@ -88,21 +93,11 @@ export function SampledFieldGlyph({
     pz + bField[2] * GLYPH_SCALE,
   ];
 
-  // Instantaneous field strength for contact-glow modulation
+  // Instantaneous field strength for contact-glow modulation.
+  // Coupling further dims the glow when receiver alignment is poor.
   const fieldStrength = Math.abs(Math.sin(phase));
-  const contactGlowIntensity = 1.0 + fieldStrength * 3.0;
-
-  // ── World-space signal tip — contact point on the geometry rim ─────────
-  // Compute the local tip (inside the demo group's coordinate frame) and rotate
-  // it by the same quaternion the group uses so we get the world-space position.
-  const coupledParams = { ...params, amplitude: params.amplitude * couplingStrength };
-  const localTip = computeSignalTip(coupledParams, currentTime);
-  const worldTipRaw = rotateVec3ByQuat(localTip as Vec3, basis.q);
-  const contactPt: [number, number, number] = [
-    px + worldTipRaw[0],
-    py + worldTipRaw[1],
-    pz + worldTipRaw[2],
-  ];
+  const coupledGlow = 0.55 + 0.45 * couplingStrength;
+  const contactGlowIntensity = (1.8 + fieldStrength * 4.0) * coupledGlow;
 
   // ── Classical I/Q mode ─────────────────────────────────────────────────
   if (demoMode === 'complex') {
@@ -127,7 +122,7 @@ export function SampledFieldGlyph({
 
     return (
       <group>
-        {/* Arriving E-field vector */}
+        {/* Arriving E-field vector at the live rim point */}
         <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.30 * opacity} />
         <mesh position={eTip}>
           <sphereGeometry args={[0.016, 6, 6]} />
@@ -158,35 +153,36 @@ export function SampledFieldGlyph({
           </>
         )}
 
-        {/* Field→circle contact: faint line from E-tip to the phasor's circle-rim position */}
+        {/* Field-collapse guide: faint line from E-tip back to the contact point */}
         <Line
-          points={[eTip, contactPt]}
+          points={[eTip, origin]}
           color="#00d4ff"
           lineWidth={0.7}
           transparent
           opacity={0.22 * opacity * fieldStrength}
         />
-        {/* Contact dot on the unit-circle rim — where the wave currently "lands" */}
-        <mesh position={contactPt}>
-          <sphereGeometry args={[0.034, 8, 8]} />
+
+        {/* ── HERO: contact dot on the unit-circle rim ──────────────────── */}
+        {/* This IS the reception event — the live phasor tip where the wave lands */}
+        <mesh position={origin}>
+          <sphereGeometry args={[0.042, 10, 10]} />
           <meshStandardMaterial
             color="#00d4ff"
             emissive="#00d4ff"
             emissiveIntensity={contactGlowIntensity}
             transparent
-            opacity={0.65 * fieldStrength * opacity}
+            opacity={0.85 * opacity}
           />
         </mesh>
-
-        {/* Origin contact glow — pulses with arriving field strength */}
+        {/* Soft outer halo reinforcing the perimeter contact */}
         <mesh position={origin}>
-          <sphereGeometry args={[0.026, 8, 8]} />
+          <sphereGeometry args={[0.085, 12, 12]} />
           <meshStandardMaterial
-            color="#f59e0b"
-            emissive="#f59e0b"
-            emissiveIntensity={contactGlowIntensity}
+            color="#00d4ff"
+            emissive="#00d4ff"
+            emissiveIntensity={0.6}
             transparent
-            opacity={0.78 * opacity}
+            opacity={0.12 * fieldStrength * opacity}
           />
         </mesh>
       </group>
@@ -221,7 +217,7 @@ export function SampledFieldGlyph({
 
     return (
       <group>
-        {/* Arriving E-field vector */}
+        {/* Arriving E-field vector at the live ellipse/helix contact point */}
         <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.28 * opacity} />
         <mesh position={eTip}>
           <sphereGeometry args={[0.016, 6, 6]} />
@@ -267,35 +263,35 @@ export function SampledFieldGlyph({
           </>
         )}
 
-        {/* Field→ellipse contact: faint line from E-tip to the current ellipse-tip position */}
+        {/* Field-collapse guide: from E-tip back to the live ellipse/helix contact point */}
         <Line
-          points={[eTip, contactPt]}
+          points={[eTip, origin]}
           color="#8b5cf6"
           lineWidth={0.7}
           transparent
           opacity={0.20 * opacity * fieldStrength}
         />
-        {/* Contact dot on the ellipse rim — where the wave currently "lands" */}
-        <mesh position={contactPt}>
-          <sphereGeometry args={[0.034, 8, 8]} />
+
+        {/* ── HERO: contact dot on the live ellipse/helix trace ─────────── */}
+        <mesh position={origin}>
+          <sphereGeometry args={[0.042, 10, 10]} />
           <meshStandardMaterial
             color="#8b5cf6"
             emissive="#8b5cf6"
             emissiveIntensity={contactGlowIntensity}
             transparent
-            opacity={0.65 * fieldStrength * opacity}
+            opacity={0.85 * opacity}
           />
         </mesh>
-
-        {/* Origin contact glow */}
+        {/* Soft outer halo */}
         <mesh position={origin}>
-          <sphereGeometry args={[0.026, 8, 8]} />
+          <sphereGeometry args={[0.085, 12, 12]} />
           <meshStandardMaterial
-            color="#f59e0b"
-            emissive="#f59e0b"
-            emissiveIntensity={contactGlowIntensity}
+            color="#8b5cf6"
+            emissive="#8b5cf6"
+            emissiveIntensity={0.6}
             transparent
-            opacity={0.78 * opacity}
+            opacity={0.12 * fieldStrength * opacity}
           />
         </mesh>
       </group>
@@ -329,9 +325,31 @@ export function SampledFieldGlyph({
     pz + iAxis[2] * w_fwd * GLYPH_SCALE,
   ];
 
+  // Faint great-circle rings centred at the contact point — evoke the projected
+  // hyperspherical receiving boundary (inspired by the HypersphereVisualization).
+  // Each ring traces a circle of radius `boundaryR` in a different great-circle plane:
+  //   XY plane (equatorial), XZ plane (meridional), YZ plane (lateral).
+  const boundaryR = 0.16;
+
+  /** Build a ring in the specified great-circle plane centred at the contact point.
+   *  `xAxisCoeff`/`yAxisCoeff` select which world axes form the ring plane;
+   *  `rotAngle` offsets the starting angle for visual variety. */
+  const generateBoundaryRing = (xAxisCoeff: number, yAxisCoeff: number, zAxisCoeff: number, rotAngle = 0): [number, number, number][] => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = (i / 24) * 2 * Math.PI + rotAngle;
+      pts.push([
+        px + xAxisCoeff * boundaryR * Math.cos(a),
+        py + yAxisCoeff * boundaryR * Math.sin(a),
+        pz + zAxisCoeff * boundaryR * Math.sin(a),
+      ]);
+    }
+    return pts;
+  };
+
   return (
     <group>
-      {/* Arriving E-field vector */}
+      {/* Arriving E-field vector at the live quaternionic boundary point */}
       <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.28 * opacity} />
       <mesh position={eTip}>
         <sphereGeometry args={[0.016, 6, 6]} />
@@ -377,15 +395,37 @@ export function SampledFieldGlyph({
         </>
       )}
 
-      {/* Absorption glow at origin — unified quaternionic reception indicator */}
+      {/* ── Projected hyperspherical boundary rings ────────────────────── */}
+      {/* Three faint great-circle-like rings centred at the contact point  */}
+      {/* evoke the idea of a 4D hypersphere projected down to this boundary */}
+      {/* point — inspired by the HypersphereVisualization reference design. */}
+      {/* XY-plane equatorial ring (X cos, Y sin, Z=0) */}
+      <Line points={generateBoundaryRing(1, 1, 0, 0)}            color="#f59e0b" lineWidth={0.6} transparent opacity={0.13 * opacity} />
+      {/* XZ-plane meridional ring (X cos, Y=0, Z sin) */}
+      <Line points={generateBoundaryRing(1, 0, 1, Math.PI / 4)} color="#f59e0b" lineWidth={0.6} transparent opacity={0.10 * opacity} />
+      {/* YZ-plane lateral ring (X=0, Y cos, Z sin) */}
+      <Line points={generateBoundaryRing(0, 1, 1, Math.PI / 3)} color="#f59e0b" lineWidth={0.6} transparent opacity={0.10 * opacity} />
+
+      {/* ── HERO: contact dot on the projected quaternionic boundary ──── */}
       <mesh position={origin}>
-        <sphereGeometry args={[0.026, 8, 8]} />
+        <sphereGeometry args={[0.046, 10, 10]} />
         <meshStandardMaterial
           color="#f59e0b"
           emissive="#f59e0b"
           emissiveIntensity={contactGlowIntensity}
           transparent
-          opacity={0.78 * opacity}
+          opacity={0.90 * opacity}
+        />
+      </mesh>
+      {/* Outer halo — the unified quaternionic reception event */}
+      <mesh position={origin}>
+        <sphereGeometry args={[0.10, 12, 12]} />
+        <meshStandardMaterial
+          color="#f59e0b"
+          emissive="#f59e0b"
+          emissiveIntensity={0.8}
+          transparent
+          opacity={0.15 * fieldStrength * opacity}
         />
       </mesh>
     </group>
