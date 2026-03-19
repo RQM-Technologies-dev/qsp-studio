@@ -230,6 +230,7 @@ function SceneContent({
             demoMode={currentMode}
             receiverYaw={receiverYaw}
             receiverPitch={receiverPitch}
+            couplingStrength={couplingStrength}
           />
         </>
       )}

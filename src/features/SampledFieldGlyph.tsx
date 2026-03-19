@@ -1,197 +1,391 @@
 import { Line } from '@react-three/drei';
-import { SignalParams, DemoMode } from '../math/signal';
+import { SignalParams, DemoMode, computeSignalTip } from '../math/signal';
 import {
   computeReceiverBasis,
   projectFieldOntoReceiver,
   E_FIELD_SCALE,
   B_FIELD_SCALE,
 } from '../math/receiverBasis';
-import { Vec3 } from '../math/quaternion';
+import { Vec3, rotateVec3ByQuat } from '../math/quaternion';
 
 interface SampledFieldGlyphProps {
-  params:       SignalParams;
-  currentTime:  number;
-  position:     [number, number, number];
-  demoMode:     DemoMode;
-  receiverYaw?: number;
-  receiverPitch?: number;
-  opacity?:     number;
+  params:            SignalParams;
+  currentTime:       number;
+  position:          [number, number, number];
+  demoMode:          DemoMode;
+  receiverYaw?:      number;
+  receiverPitch?:    number;
+  /**
+   * Normalized coupling strength [0,1].
+   * Used so the contact-dot radius matches the demo geometry's coupled amplitude.
+   */
+  couplingStrength?: number;
+  opacity?:          number;
 }
 
 /** Scale from field units to compact glyph size. */
 const GLYPH_SCALE = 0.46;
 
-/** Dot product of two Vec3. */
-const dot3 = (a: Vec3, b: Vec3) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-
 /**
- * Tiny mode-aware field projection overlay at the main representation.
+ * Mode-specific wave-basis contact visual.
  *
- * Shows how the incoming EM field is resolved directly into the sensing
- * basis of the main geometric structure (unit circle / polarization frame /
- * quaternionic local frame).
+ * Shows how the incoming EM wave resolves directly into each mode's geometric
+ * sensing basis at the point of contact (the main geometry origin).
  *
- * 1. The incoming E-field vector (translucent white) at the geometry origin.
- * 2. The sensing frame's I-axis (j_r, red) and Q-axis (k_r, green) in world space.
- * 3. The projected component arrows along each sensing axis (brighter, coloured).
- * 4. Faint projection lines connecting the E-field tip to each projected point.
+ * Classical  — E resolves onto the unit circle's Re (I) and Im (Q) axes.
+ *              A glowing contact dot on the circle rim shows where the field lands.
+ * Polarized  — E resolves onto the minor b-axis; B onto the normal n̂-axis.
+ *              A contact dot marks the current ellipse-tip position.
+ * Quaternionic — E and B each resolve into their respective quaternionic-basis
+ *              channels. An amber absorption glow marks unified reception.
  *
- * Rotating the sensing frame via yaw/pitch changes which components are extracted,
- * making the encoding physically frame-dependent.
+ * Keeps projection lines subtle and elegant — colours match each mode's geometry.
  */
 export function SampledFieldGlyph({
   params,
   currentTime,
   position,
   demoMode,
-  receiverYaw   = 0,
-  receiverPitch = 0,
-  opacity = 1,
+  receiverYaw      = 0,
+  receiverPitch    = 0,
+  couplingStrength = 1,
+  opacity          = 1,
 }: SampledFieldGlyphProps) {
   const [px, py, pz] = position;
 
-  // ── Incoming field at the main representation position (origin, x=0) ────
-  // The wave phase at origin simplifies to: -2π * f * t + phase
+  // ── Incoming field at origin (x = 0) ──────────────────────────────────
+  // Traveling wave: phase = k·x − ω·t + signal_phase.
+  // At x=0: k·0 = 0, leaving −2π·f·t + signal_phase.
+  // The negative sign reflects propagation in the +X direction.
   const phase = -2 * Math.PI * params.frequency * currentTime + params.phase;
   const eAmp = params.amplitude * E_FIELD_SCALE;
   const bAmp = params.amplitude * B_FIELD_SCALE;
 
-  const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];           // E oscillates in Y
-  const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];           // B oscillates in Z
+  const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];  // E oscillates in Y
+  const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];  // B oscillates in Z
 
-  // ── Sensing frame local basis in world space ────────────────────────────────
+  // ── Sensing basis — same rotation as the demo group ───────────────────
+  // iAxis = rotated X (forward / Re axis)
+  // jAxis = rotated Y (I-channel / Im / minor axis)
+  // kAxis = rotated Z (Q-channel / normal axis)
   const basis = computeReceiverBasis(receiverYaw, receiverPitch);
-  const { jAxis, kAxis } = basis;
+  const { iAxis, jAxis, kAxis } = basis;
 
-  // ── Project field onto receiver axes ──────────────────────────────────
+  // ── Project fields onto sensing axes ──────────────────────────────────
   const proj = projectFieldOntoReceiver(eField, bField, basis);
 
-  // Sampled I-channel: E projection onto j_r (plus B component for full EM)
-  const I_sampled = proj.jE + proj.jB;
-  // Sampled Q-channel: E projection onto k_r + B component
-  const Q_sampled = proj.kE + proj.kB;
-
-  // ── World-space points ─────────────────────────────────────────────────
+  // ── World-space geometry points ────────────────────────────────────────
   const origin: [number, number, number] = [px, py, pz];
 
-  // Incoming E-field tip (world space)
   const eTip: [number, number, number] = [
     px + eField[0] * GLYPH_SCALE,
     py + eField[1] * GLYPH_SCALE,
     pz + eField[2] * GLYPH_SCALE,
   ];
-
-  // Projected I point: along j_r axis with I_sampled magnitude
-  const iPt: [number, number, number] = [
-    px + jAxis[0] * I_sampled * GLYPH_SCALE,
-    py + jAxis[1] * I_sampled * GLYPH_SCALE,
-    pz + jAxis[2] * I_sampled * GLYPH_SCALE,
-  ];
-
-  // Projected Q point: along k_r axis with Q_sampled magnitude
-  const qPt: [number, number, number] = [
-    px + kAxis[0] * Q_sampled * GLYPH_SCALE,
-    py + kAxis[1] * Q_sampled * GLYPH_SCALE,
-    pz + kAxis[2] * Q_sampled * GLYPH_SCALE,
-  ];
-
-  // Axis endpoints (fixed length, orientation-dependent)
-  const axisLen = GLYPH_SCALE * 1.05;
-  const jEnd: [number, number, number] = [
-    px + jAxis[0] * axisLen, py + jAxis[1] * axisLen, pz + jAxis[2] * axisLen,
-  ];
-  const kEnd: [number, number, number] = [
-    px + kAxis[0] * axisLen, py + kAxis[1] * axisLen, pz + kAxis[2] * axisLen,
-  ];
-
-  // ── Mode-specific extra: B-field contribution for polarized ───────────
   const bTip: [number, number, number] = [
     px + bField[0] * GLYPH_SCALE,
     py + bField[1] * GLYPH_SCALE,
     pz + bField[2] * GLYPH_SCALE,
   ];
 
-  // Quaternionic: also show the forward (i_r) axis sampled from total field
-  const { iAxis } = basis;
-  const totalField: Vec3 = [
-    eField[0] + bField[0],
-    eField[1] + bField[1],
-    eField[2] + bField[2],
+  // Instantaneous field strength for contact-glow modulation
+  const fieldStrength = Math.abs(Math.sin(phase));
+  const contactGlowIntensity = 1.0 + fieldStrength * 3.0;
+
+  // ── World-space signal tip — contact point on the geometry rim ─────────
+  // Compute the local tip (inside the demo group's coordinate frame) and rotate
+  // it by the same quaternion the group uses so we get the world-space position.
+  const coupledParams = { ...params, amplitude: params.amplitude * couplingStrength };
+  const localTip = computeSignalTip(coupledParams, currentTime);
+  const worldTipRaw = rotateVec3ByQuat(localTip as Vec3, basis.q);
+  const contactPt: [number, number, number] = [
+    px + worldTipRaw[0],
+    py + worldTipRaw[1],
+    pz + worldTipRaw[2],
   ];
-  const W_sampled = dot3(totalField, iAxis);
+
+  // ── Classical I/Q mode ─────────────────────────────────────────────────
+  if (demoMode === 'complex') {
+    // The unit circle's axes in world space:
+    //   Re (I) axis = iAxis (rotated local X)
+    //   Im (Q) axis = jAxis (rotated local Y)
+    // At rest: E (Y direction) projects entirely onto Im/Q (jAxis); Re is zero.
+    // When the frame is rotated, both channels become active.
+    const e_Re = proj.iE;  // E onto Re axis (visible after rotation)
+    const e_Im = proj.jE;  // E onto Im/Q axis (dominant at rest)
+
+    const rePt: [number, number, number] = [
+      px + iAxis[0] * e_Re * GLYPH_SCALE,
+      py + iAxis[1] * e_Re * GLYPH_SCALE,
+      pz + iAxis[2] * e_Re * GLYPH_SCALE,
+    ];
+    const imPt: [number, number, number] = [
+      px + jAxis[0] * e_Im * GLYPH_SCALE,
+      py + jAxis[1] * e_Im * GLYPH_SCALE,
+      pz + jAxis[2] * e_Im * GLYPH_SCALE,
+    ];
+
+    return (
+      <group>
+        {/* Arriving E-field vector */}
+        <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.30 * opacity} />
+        <mesh position={eTip}>
+          <sphereGeometry args={[0.016, 6, 6]} />
+          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1} transparent opacity={0.40 * opacity} />
+        </mesh>
+
+        {/* Im / Q-axis component — E resolves into the circle's vertical Q-direction */}
+        {Math.abs(e_Im) > 0.005 && (
+          <>
+            <Line points={[eTip, imPt]} color="#44ee88" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+            <Line points={[origin, imPt]} color="#44ee88" lineWidth={2.0} transparent opacity={0.72 * opacity} />
+            <mesh position={imPt}>
+              <sphereGeometry args={[0.026, 8, 8]} />
+              <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+            </mesh>
+          </>
+        )}
+
+        {/* Re / I-axis component — only visible when the frame is rotated off-axis */}
+        {Math.abs(e_Re) > 0.005 && (
+          <>
+            <Line points={[eTip, rePt]} color="#ff5566" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+            <Line points={[origin, rePt]} color="#ff5566" lineWidth={2.0} transparent opacity={0.72 * opacity} />
+            <mesh position={rePt}>
+              <sphereGeometry args={[0.026, 8, 8]} />
+              <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+            </mesh>
+          </>
+        )}
+
+        {/* Field→circle contact: faint line from E-tip to the phasor's circle-rim position */}
+        <Line
+          points={[eTip, contactPt]}
+          color="#00d4ff"
+          lineWidth={0.7}
+          transparent
+          opacity={0.22 * opacity * fieldStrength}
+        />
+        {/* Contact dot on the unit-circle rim — where the wave currently "lands" */}
+        <mesh position={contactPt}>
+          <sphereGeometry args={[0.034, 8, 8]} />
+          <meshStandardMaterial
+            color="#00d4ff"
+            emissive="#00d4ff"
+            emissiveIntensity={contactGlowIntensity}
+            transparent
+            opacity={0.65 * fieldStrength * opacity}
+          />
+        </mesh>
+
+        {/* Origin contact glow — pulses with arriving field strength */}
+        <mesh position={origin}>
+          <sphereGeometry args={[0.026, 8, 8]} />
+          <meshStandardMaterial
+            color="#f59e0b"
+            emissive="#f59e0b"
+            emissiveIntensity={contactGlowIntensity}
+            transparent
+            opacity={0.78 * opacity}
+          />
+        </mesh>
+      </group>
+    );
+  }
+
+  // ── Polarized mode ─────────────────────────────────────────────────────
+  if (demoMode === 'polarized') {
+    // Polarization frame axes in world space:
+    //   major a-axis = iAxis (rotated local X)
+    //   minor b-axis = jAxis (rotated local Y) — E resolves here at rest
+    //   normal n̂    = kAxis (rotated local Z) — B resolves here at rest
+    const e_major  = proj.iE;   // E → major a-axis (magenta, dominant after rotation)
+    const e_minor  = proj.jE;   // E → minor b-axis (purple, dominant at rest)
+    const b_normal = proj.kB;   // B → normal n̂-axis (lavender)
+
+    const majorPt: [number, number, number] = [
+      px + iAxis[0] * e_major * GLYPH_SCALE,
+      py + iAxis[1] * e_major * GLYPH_SCALE,
+      pz + iAxis[2] * e_major * GLYPH_SCALE,
+    ];
+    const minorPt: [number, number, number] = [
+      px + jAxis[0] * e_minor * GLYPH_SCALE,
+      py + jAxis[1] * e_minor * GLYPH_SCALE,
+      pz + jAxis[2] * e_minor * GLYPH_SCALE,
+    ];
+    const normalPt: [number, number, number] = [
+      px + kAxis[0] * b_normal * GLYPH_SCALE,
+      py + kAxis[1] * b_normal * GLYPH_SCALE,
+      pz + kAxis[2] * b_normal * GLYPH_SCALE,
+    ];
+
+    return (
+      <group>
+        {/* Arriving E-field vector */}
+        <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.28 * opacity} />
+        <mesh position={eTip}>
+          <sphereGeometry args={[0.016, 6, 6]} />
+          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1} transparent opacity={0.35 * opacity} />
+        </mesh>
+
+        {/* Arriving B-field vector */}
+        <Line points={[origin, bTip]} color="#ff44aa" lineWidth={1.0} transparent opacity={0.22 * opacity} />
+
+        {/* E → major a-axis (magenta) — visible when frame is rotated */}
+        {Math.abs(e_major) > 0.005 && (
+          <>
+            <Line points={[eTip, majorPt]} color="#e879f9" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+            <Line points={[origin, majorPt]} color="#e879f9" lineWidth={2.0} transparent opacity={0.70 * opacity} />
+            <mesh position={majorPt}>
+              <sphereGeometry args={[0.026, 8, 8]} />
+              <meshStandardMaterial color="#e879f9" emissive="#e879f9" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+            </mesh>
+          </>
+        )}
+
+        {/* E → minor b-axis (purple) — primary at rest */}
+        {Math.abs(e_minor) > 0.005 && (
+          <>
+            <Line points={[eTip, minorPt]} color="#a78bfa" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+            <Line points={[origin, minorPt]} color="#a78bfa" lineWidth={2.0} transparent opacity={0.70 * opacity} />
+            <mesh position={minorPt}>
+              <sphereGeometry args={[0.026, 8, 8]} />
+              <meshStandardMaterial color="#a78bfa" emissive="#a78bfa" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+            </mesh>
+          </>
+        )}
+
+        {/* B → normal n̂-axis (lavender) */}
+        {Math.abs(b_normal) > 0.005 && (
+          <>
+            <Line points={[bTip, normalPt]} color="#c4b5fd" lineWidth={0.8} transparent opacity={0.25 * opacity} />
+            <Line points={[origin, normalPt]} color="#c4b5fd" lineWidth={2.0} transparent opacity={0.65 * opacity} />
+            <mesh position={normalPt}>
+              <sphereGeometry args={[0.022, 8, 8]} />
+              <meshStandardMaterial color="#c4b5fd" emissive="#c4b5fd" emissiveIntensity={2.0} transparent opacity={0.82 * opacity} />
+            </mesh>
+          </>
+        )}
+
+        {/* Field→ellipse contact: faint line from E-tip to the current ellipse-tip position */}
+        <Line
+          points={[eTip, contactPt]}
+          color="#8b5cf6"
+          lineWidth={0.7}
+          transparent
+          opacity={0.20 * opacity * fieldStrength}
+        />
+        {/* Contact dot on the ellipse rim — where the wave currently "lands" */}
+        <mesh position={contactPt}>
+          <sphereGeometry args={[0.034, 8, 8]} />
+          <meshStandardMaterial
+            color="#8b5cf6"
+            emissive="#8b5cf6"
+            emissiveIntensity={contactGlowIntensity}
+            transparent
+            opacity={0.65 * fieldStrength * opacity}
+          />
+        </mesh>
+
+        {/* Origin contact glow */}
+        <mesh position={origin}>
+          <sphereGeometry args={[0.026, 8, 8]} />
+          <meshStandardMaterial
+            color="#f59e0b"
+            emissive="#f59e0b"
+            emissiveIntensity={contactGlowIntensity}
+            transparent
+            opacity={0.78 * opacity}
+          />
+        </mesh>
+      </group>
+    );
+  }
+
+  // ── Quaternionic mode ──────────────────────────────────────────────────
+  // The total field (E + B) is resolved into all three quaternionic basis channels.
+  // At rest: E (Y) → I-channel (jAxis), B (Z) → K-channel (kAxis), forward is zero.
+  // When rotated, all three channels become active — the richest capture.
+  const e_i = proj.jE;   // E → I-channel (jAxis = local Y), rose (#ff6688)
+  const b_k = proj.kB;   // B → K-channel (kAxis = local Z), blue (#5588ff)
+  // Forward (w-like) channel: non-zero when the frame is rotated
+  const eFwd = proj.iE;  // E → forward iAxis (amber #f59e0b)
+  const bFwd = proj.iB;  // B → forward iAxis
+  const w_fwd = eFwd + bFwd;
+
+  const iPt: [number, number, number] = [
+    px + jAxis[0] * e_i * GLYPH_SCALE,
+    py + jAxis[1] * e_i * GLYPH_SCALE,
+    pz + jAxis[2] * e_i * GLYPH_SCALE,
+  ];
+  const kPt: [number, number, number] = [
+    px + kAxis[0] * b_k * GLYPH_SCALE,
+    py + kAxis[1] * b_k * GLYPH_SCALE,
+    pz + kAxis[2] * b_k * GLYPH_SCALE,
+  ];
   const wPt: [number, number, number] = [
-    px + iAxis[0] * W_sampled * GLYPH_SCALE,
-    py + iAxis[1] * W_sampled * GLYPH_SCALE,
-    pz + iAxis[2] * W_sampled * GLYPH_SCALE,
-  ];
-  const iEnd: [number, number, number] = [
-    px + iAxis[0] * axisLen, py + iAxis[1] * axisLen, pz + iAxis[2] * axisLen,
+    px + iAxis[0] * w_fwd * GLYPH_SCALE,
+    py + iAxis[1] * w_fwd * GLYPH_SCALE,
+    pz + iAxis[2] * w_fwd * GLYPH_SCALE,
   ];
 
   return (
     <group>
-      {/* ── Incoming field vectors (world space, behind axes so subtler) ── */}
-      {/* E-field — translucent white */}
+      {/* Arriving E-field vector */}
       <Line points={[origin, eTip]} color="#ffffff" lineWidth={1.5} transparent opacity={0.28 * opacity} />
       <mesh position={eTip}>
-        <sphereGeometry args={[0.018, 6, 6]} />
+        <sphereGeometry args={[0.016, 6, 6]} />
         <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={1} transparent opacity={0.35 * opacity} />
       </mesh>
 
-      {/* B-field — shown in polarized + quaternionic modes */}
-      {demoMode !== 'complex' && (
-        <Line points={[origin, bTip]} color="#ff44aa" lineWidth={1} transparent opacity={0.22 * opacity} />
-      )}
+      {/* Arriving B-field vector */}
+      <Line points={[origin, bTip]} color="#ff44aa" lineWidth={1.0} transparent opacity={0.22 * opacity} />
 
-      {/* ── Receiver sensing axes (ghost, shows orientation) ─────────────── */}
-      {/* I-axis direction (j_r) — faint red */}
-      <Line points={[origin, jEnd]} color="#ff5566" lineWidth={0.8} transparent opacity={0.25 * opacity} />
-      {/* Q-axis direction (k_r) — faint green */}
-      <Line points={[origin, kEnd]} color="#44ee88" lineWidth={0.8} transparent opacity={0.25 * opacity} />
-      {demoMode === 'quaternionic' && (
-        /* Forward axis (i_r) — faint blue */
-        <Line points={[origin, iEnd]} color="#5588ff" lineWidth={0.8} transparent opacity={0.25 * opacity} />
-      )}
-
-      {/* ── Faint projection lines: field tip → projected point ────────── */}
-      <Line points={[eTip, iPt]} color="#ff5566" lineWidth={0.7} transparent opacity={0.22 * opacity} />
-      <Line points={[eTip, qPt]} color="#44ee88" lineWidth={0.7} transparent opacity={0.22 * opacity} />
-
-      {/* ── Projected component arrows (bright — this is the "sampled" data) */}
-      {/* I-channel */}
-      <Line points={[origin, iPt]} color="#ff5566" lineWidth={2.2} transparent opacity={0.82 * opacity} />
-      <mesh position={iPt}>
-        <sphereGeometry args={[0.028, 8, 8]} />
-        <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
-      </mesh>
-
-      {/* Q-channel */}
-      <Line points={[origin, qPt]} color="#44ee88" lineWidth={2.2} transparent opacity={0.82 * opacity} />
-      <mesh position={qPt}>
-        <sphereGeometry args={[0.028, 8, 8]} />
-        <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
-      </mesh>
-
-      {/* Quaternionic: forward-axis (w-like) component */}
-      {demoMode === 'quaternionic' && (
+      {/* E → I-channel (jAxis, rose — matches QuaternionFrame X/i-axis colour) */}
+      {Math.abs(e_i) > 0.005 && (
         <>
-          <Line points={[origin, wPt]} color="#5588ff" lineWidth={2.2} transparent opacity={0.82 * opacity} />
-          <mesh position={wPt}>
-            <sphereGeometry args={[0.028, 8, 8]} />
-            <meshStandardMaterial color="#5588ff" emissive="#5588ff" emissiveIntensity={2.5} transparent opacity={0.9 * opacity} />
+          <Line points={[eTip, iPt]} color="#ff6688" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+          <Line points={[origin, iPt]} color="#ff6688" lineWidth={2.0} transparent opacity={0.70 * opacity} />
+          <mesh position={iPt}>
+            <sphereGeometry args={[0.026, 8, 8]} />
+            <meshStandardMaterial color="#ff6688" emissive="#ff6688" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
           </mesh>
         </>
       )}
 
-      {/* Central origin dot */}
+      {/* B → K-channel (kAxis, blue — matches QuaternionFrame Z/k-axis colour) */}
+      {Math.abs(b_k) > 0.005 && (
+        <>
+          <Line points={[bTip, kPt]} color="#5588ff" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+          <Line points={[origin, kPt]} color="#5588ff" lineWidth={2.0} transparent opacity={0.70 * opacity} />
+          <mesh position={kPt}>
+            <sphereGeometry args={[0.026, 8, 8]} />
+            <meshStandardMaterial color="#5588ff" emissive="#5588ff" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+          </mesh>
+        </>
+      )}
+
+      {/* Forward/w channel (iAxis, amber) — visible when the frame is rotated off-axis */}
+      {Math.abs(w_fwd) > 0.005 && (
+        <>
+          <Line points={[eTip, wPt]} color="#f59e0b" lineWidth={0.8} transparent opacity={0.28 * opacity} />
+          <Line points={[origin, wPt]} color="#f59e0b" lineWidth={2.0} transparent opacity={0.70 * opacity} />
+          <mesh position={wPt}>
+            <sphereGeometry args={[0.026, 8, 8]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={2.5} transparent opacity={0.88 * opacity} />
+          </mesh>
+        </>
+      )}
+
+      {/* Absorption glow at origin — unified quaternionic reception indicator */}
       <mesh position={origin}>
-        <sphereGeometry args={[0.024, 8, 8]} />
+        <sphereGeometry args={[0.026, 8, 8]} />
         <meshStandardMaterial
           color="#f59e0b"
           emissive="#f59e0b"
-          emissiveIntensity={2}
+          emissiveIntensity={contactGlowIntensity}
           transparent
-          opacity={0.85 * opacity}
+          opacity={0.78 * opacity}
         />
       </mesh>
     </group>
