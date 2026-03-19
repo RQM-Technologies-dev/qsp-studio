@@ -189,6 +189,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
       {currentMode === 'polarized' && (
@@ -202,6 +203,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
       {currentMode === 'quaternionic' && (
@@ -218,6 +220,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
 
@@ -230,6 +233,7 @@ function SceneContent({
             params={params}
             currentTime={currentTime}
             receiverX={0}
+            demoMode={currentMode}
             contactPoint={worldTip}
           />
           {/* Field projection overlay positioned AT the live rim contact point.  */}
