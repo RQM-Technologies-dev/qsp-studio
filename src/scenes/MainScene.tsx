@@ -10,6 +10,8 @@ import { IncomingWave } from '../features/IncomingWave';
 import { SampledFieldGlyph } from '../features/SampledFieldGlyph';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
 import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
+import { computeReceiverBasis } from '../math/receiverBasis';
+import { rotateVec3ByQuat } from '../math/quaternion';
 
 interface MainSceneProps {
   params: SignalParams;
@@ -83,6 +85,14 @@ function SceneContent({
 
   const tip = computeSignalTip(effectiveParams, currentTime);
   const currentMode = params.demoMode;
+
+  // ── World-space live contact point ────────────────────────────────────
+  // The demo group applies rotation={[receiverPitch, receiverYaw, 0]} so we
+  // rotate the local tip by the same receiver quaternion to get the exact
+  // world-space position where the incoming wave should meet the geometry.
+  const receiverBasis = computeReceiverBasis(receiverYaw, receiverPitch);
+  const worldTipRaw = rotateVec3ByQuat(tip, receiverBasis.q);
+  const worldTip: [number, number, number] = [worldTipRaw[0], worldTipRaw[1], worldTipRaw[2]];
 
   // Opacity for the incoming (current) mode: fade in from 0 → 1
   const inOpacity = morphProgress;
@@ -212,21 +222,22 @@ function SceneContent({
       )}
 
       {/* ── Incoming wave direct-reception layer — toggled by showIncomingWave ── */}
-      {/* The wave now propagates directly to the main representation at the origin. */}
-      {/* The geometry itself is the receiver: no separate antenna or pipeline. */}
+      {/* The wave now converges onto the live circumference/trace contact point.  */}
+      {/* Signal and receiver geometry are co-located at the same moving point.   */}
       {showIncomingWave && (
         <>
           <IncomingWave
             params={params}
             currentTime={currentTime}
             receiverX={0}
+            contactPoint={worldTip}
           />
-          {/* Field projection overlay at origin — shows how the incoming field */}
-          {/* is resolved directly into the sensing basis of the main geometry.  */}
+          {/* Field projection overlay positioned AT the live rim contact point.  */}
+          {/* All glyph visuals radiate from and collapse back to the rim point.  */}
           <SampledFieldGlyph
             params={params}
             currentTime={currentTime}
-            position={[0, 0, 0]}
+            position={worldTip}
             demoMode={currentMode}
             receiverYaw={receiverYaw}
             receiverPitch={receiverPitch}

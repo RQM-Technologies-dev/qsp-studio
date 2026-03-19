@@ -7,7 +7,6 @@ import { SignalVector } from '../components/SignalVector';
 import { TrailPath } from '../components/TrailPath';
 import { generateTrail } from '../math/polarization';
 import { quatFromAxisAngle, rotateVec3ByQuat, Vec3 } from '../math/quaternion';
-
 interface QuaternionicSignalDemoProps {
   params: SignalParams;
   currentTime: number;
@@ -186,6 +185,76 @@ const BASE_PULSE_RATE = 2.5;
 const W_PULSE_SCALE = 5.0;
 
 /**
+ * Faint projected hypersphere boundary — three great-circle-like rings at
+ * different orientations centred at the origin of the quaternionic receiving
+ * structure.  They evoke the idea that the visible 3D orbit is a projection of
+ * a 4D hyperspherical receiving boundary (as in the HypersphereVisualization
+ * reference), without literally reproducing that component.
+ *
+ * Each ring drifts at a different rate driven by |w| — differential rotation
+ * across the three great-circle planes encodes the hidden scalar component.
+ * Rate factors (1.0, 0.7, 0.5) are chosen so the rings stay visually
+ * distinct and never fully synchronise, giving a persistent sense of
+ * independent 4D rotation.
+ */
+function HyperBoundary({ amplitude, wComponent, currentTime, opacity }: {
+  amplitude: number;
+  wComponent: number;
+  currentTime: number;
+  opacity: number;
+}) {
+  // Base drift driven by |w|; each ring gets a different fraction so they
+  // rotate independently and never lock together (1.0 × base, 0.7 ×, 0.5 ×).
+  const baseDrift = currentTime * Math.abs(wComponent) * 0.4;
+  const r = amplitude;
+
+  // XY-plane equatorial ring — full drift rate (×1.0)
+  const ring1 = useMemo<[number, number, number][]>(() => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 40; i++) {
+      const a = (i / 40) * 2 * Math.PI + baseDrift;
+      pts.push([r * Math.cos(a), r * Math.sin(a), 0]);
+    }
+    return pts;
+  }, [r, baseDrift]);
+
+  // XZ-plane meridional ring — 70% drift rate so it stays visually distinct
+  const ring2 = useMemo<[number, number, number][]>(() => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 40; i++) {
+      const a = (i / 40) * 2 * Math.PI + baseDrift * 0.7;
+      pts.push([r * Math.cos(a), 0, r * Math.sin(a)]);
+    }
+    return pts;
+  }, [r, baseDrift]);
+
+  // YZ-plane lateral ring — 50% drift rate, slowest of the three
+  const ring3 = useMemo<[number, number, number][]>(() => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 40; i++) {
+      const a = (i / 40) * 2 * Math.PI + baseDrift * 0.5;
+      pts.push([0, r * Math.cos(a), r * Math.sin(a)]);
+    }
+    return pts;
+  }, [r, baseDrift]);
+
+  return (
+    <group>
+      {ring1.length >= 2 && (
+        <Line points={ring1} color="#f59e0b" lineWidth={0.6} transparent opacity={0.10 * opacity} />
+      )}
+      {ring2.length >= 2 && (
+        <Line points={ring2} color="#f59e0b" lineWidth={0.6} transparent opacity={0.08 * opacity} />
+      )}
+      {ring3.length >= 2 && (
+        <Line points={ring3} color="#f59e0b" lineWidth={0.6} transparent opacity={0.08 * opacity} />
+      )}
+    </group>
+  );
+}
+
+
+/**
  * Build a small ring of points centred at (cx, cy, cz) with radius r,
  * rotated by rotAngle in the XY plane.
  */
@@ -261,6 +330,15 @@ export function QuaternionicSignalDemo({
 
       {/* XY-plane shadow — shows how the quaternionic state projects to a classical orbit */}
       {showProjectionShadow && <ProjectionShadow trail={trail} opacity={structureOpacity} />}
+
+      {/* Projected hypersphere boundary rings — always shown; evoke the 4D receiving  */}
+      {/* surface projected into 3D, as in the HypersphereVisualization reference.    */}
+      <HyperBoundary
+        amplitude={params.amplitude}
+        wComponent={wComponent}
+        currentTime={currentTime}
+        opacity={structureOpacity}
+      />
 
       {/* Rich enhanced trail — toggled by showTrailHistory */}
       {showTrailHistory && <TrailPath points={trail} demoMode="quaternionic" enhanced opacity={structureOpacity} />}
