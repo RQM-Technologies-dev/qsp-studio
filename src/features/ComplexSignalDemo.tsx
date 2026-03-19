@@ -7,9 +7,11 @@ interface ComplexSignalDemoProps {
   params: SignalParams;
   currentTime: number;
   tip: [number, number, number];
+  /** When true, show Re/Im projection lines — the explicit basis decomposition. */
+  showBasis: boolean;
 }
 
-export function ComplexSignalDemo({ params, tip }: ComplexSignalDemoProps) {
+export function ComplexSignalDemo({ params, tip, showBasis }: ComplexSignalDemoProps) {
   const { amplitude } = params;
 
   // Static unit circle in the XY plane — the defining geometry of a complex exponential
@@ -29,36 +31,27 @@ export function ComplexSignalDemo({ params, tip }: ComplexSignalDemoProps) {
 
   return (
     <>
-      {/* Full unit circle outline — the orbit of e^{iθ} */}
+      {/* Full unit circle outline — always visible; this is the fundamental basis manifold */}
       <Line points={circlePoints} color="#00d4ff" lineWidth={1.8} transparent opacity={0.45} />
 
-      {/* Faint projection line: tip → Re axis */}
-      <Line
-        points={[tip, rePoint]}
-        color="#ff5566"
-        lineWidth={1}
-        transparent
-        opacity={0.35}
-      />
-      {/* Faint projection line: tip → Im axis */}
-      <Line
-        points={[tip, imPoint]}
-        color="#44ee88"
-        lineWidth={1}
-        transparent
-        opacity={0.35}
-      />
+      {/* Basis decomposition: Re / Im projection lines — toggled by showBasis */}
+      {showBasis && (
+        <>
+          <Line points={[tip, rePoint]} color="#ff5566" lineWidth={1} transparent opacity={0.35} />
+          <Line points={[tip, imPoint]} color="#44ee88" lineWidth={1} transparent opacity={0.35} />
 
-      {/* Re intercept dot */}
-      <mesh position={rePoint}>
-        <sphereGeometry args={[0.04, 10, 10]} />
-        <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2} transparent opacity={0.75} />
-      </mesh>
-      {/* Im intercept dot */}
-      <mesh position={imPoint}>
-        <sphereGeometry args={[0.04, 10, 10]} />
-        <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2} transparent opacity={0.75} />
-      </mesh>
+          {/* Re intercept dot */}
+          <mesh position={rePoint}>
+            <sphereGeometry args={[0.04, 10, 10]} />
+            <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2} transparent opacity={0.75} />
+          </mesh>
+          {/* Im intercept dot */}
+          <mesh position={imPoint}>
+            <sphereGeometry args={[0.04, 10, 10]} />
+            <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2} transparent opacity={0.75} />
+          </mesh>
+        </>
+      )}
 
       {/* Phasor: the rotating arm from origin to the unit-circle point */}
       <SignalVector tip={tip} demoMode="complex" />

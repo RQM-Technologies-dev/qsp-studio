@@ -1,4 +1,4 @@
-import { SignalParams, PolarizationMode } from '../math/signal';
+import { SignalParams, PolarizationMode, DemoMode } from '../math/signal';
 import { SweepMode } from './PresetBar';
 
 interface ControlPanelProps {
@@ -6,11 +6,21 @@ interface ControlPanelProps {
   animSpeed: number;
   showClassicalSplit: boolean;
   showProjectionPlanes: boolean;
+  showBasis: boolean;
+  showTrailHistory: boolean;
+  showFiber: boolean;
+  showLocalFrame: boolean;
+  showSpectrumPanel: boolean;
   sweepMode: SweepMode;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
   onShowClassicalSplitChange: (v: boolean) => void;
   onShowProjectionPlanesChange: (v: boolean) => void;
+  onShowBasisChange: (v: boolean) => void;
+  onShowTrailHistoryChange: (v: boolean) => void;
+  onShowFiberChange: (v: boolean) => void;
+  onShowLocalFrameChange: (v: boolean) => void;
+  onShowSpectrumPanelChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -41,27 +51,67 @@ function Slider({ label, value, min, max, step, disabled = false, onChange }: Sl
   );
 }
 
+interface LayerToggleProps {
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+  title?: string;
+}
+
+function LayerToggle({ label, active, onToggle, title }: LayerToggleProps) {
+  return (
+    <div className="slider-row">
+      <label>{label}</label>
+      <button
+        className={`toggle-btn ${active ? 'active' : ''}`}
+        onClick={onToggle}
+        title={title}
+      >
+        {active ? 'ON' : 'OFF'}
+      </button>
+    </div>
+  );
+}
+
+/** Labels shown per mode in the basis toggle tooltip. */
+const BASIS_TITLES: Record<DemoMode, string> = {
+  complex:      'Show Re/Im projection lines onto the real and imaginary axes',
+  polarized:    'Show the polarization frame: major axis a, minor axis b, normal n̂',
+  quaternionic: 'Show the polarization frame axes (not available in this mode)',
+};
+
 export function ControlPanel({
   params,
   animSpeed,
   showClassicalSplit,
   showProjectionPlanes,
+  showBasis,
+  showTrailHistory,
+  showFiber,
+  showLocalFrame,
+  showSpectrumPanel,
   sweepMode,
   onParamsChange,
   onAnimSpeedChange,
   onShowClassicalSplitChange,
   onShowProjectionPlanesChange,
+  onShowBasisChange,
+  onShowTrailHistoryChange,
+  onShowFiberChange,
+  onShowLocalFrameChange,
+  onShowSpectrumPanelChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
 
   return (
     <div className="control-panel">
+      {/* ── Signal parameters ── */}
       <div className="control-section">
-        <h4>Geometric State — Signal Parameters</h4>
+        <h4>Signal Parameters</h4>
         <Slider label="Amplitude" value={params.amplitude} min={0.1} max={1.0} step={0.01} onChange={(v) => onParamsChange({ amplitude: v })} />
         <Slider
-          label="Phase Evolution"
+          label="Phase Speed"
           value={animSpeed}
           min={0}
           max={3}
@@ -69,55 +119,29 @@ export function ControlPanel({
           disabled={phaseLocked}
           onChange={onAnimSpeedChange}
         />
-        <Slider label="Frequency / Rate" value={params.frequency} min={0.1} max={5.0} step={0.1} onChange={(v) => onParamsChange({ frequency: v })} />
-        <Slider label="Polarization Ellipticity" value={params.ellipticity} min={0} max={1} step={0.01} onChange={(v) => onParamsChange({ ellipticity: v })} />
+        <Slider label="Frequency" value={params.frequency} min={0.1} max={5.0} step={0.1} onChange={(v) => onParamsChange({ frequency: v })} />
+        <Slider label="Ellipticity" value={params.ellipticity} min={0} max={1} step={0.01} onChange={(v) => onParamsChange({ ellipticity: v })} />
       </div>
 
+      {/* ── Mode-specific controls ── */}
       {params.demoMode === 'quaternionic' && (
         <div className="control-section">
           <h4>Quaternionic Orientation{orientationLocked ? ' — auto-swept' : ''}</h4>
-          <Slider
-            label="Q. Orientation X"
-            value={params.orientationX}
-            min={-1}
-            max={1}
-            step={0.01}
-            disabled={orientationLocked}
-            onChange={(v) => onParamsChange({ orientationX: v })}
+          <Slider label="Axis X" value={params.orientationX} min={-1} max={1} step={0.01} disabled={orientationLocked} onChange={(v) => onParamsChange({ orientationX: v })} />
+          <Slider label="Axis Y" value={params.orientationY} min={-1} max={1} step={0.01} disabled={orientationLocked} onChange={(v) => onParamsChange({ orientationY: v })} />
+          <Slider label="Axis Z" value={params.orientationZ} min={-1} max={1} step={0.01} disabled={orientationLocked} onChange={(v) => onParamsChange({ orientationZ: v })} />
+          <LayerToggle
+            label="Classical Split"
+            active={showClassicalSplit}
+            onToggle={() => onShowClassicalSplitChange(!showClassicalSplit)}
+            title="Show the classical 2D complex orbit as a ghost, so you can compare it to the quaternionic path"
           />
-          <Slider
-            label="Q. Orientation Y"
-            value={params.orientationY}
-            min={-1}
-            max={1}
-            step={0.01}
-            disabled={orientationLocked}
-            onChange={(v) => onParamsChange({ orientationY: v })}
-          />
-          <Slider
-            label="Q. Orientation Z"
-            value={params.orientationZ}
-            min={-1}
-            max={1}
-            step={0.01}
-            disabled={orientationLocked}
-            onChange={(v) => onParamsChange({ orientationZ: v })}
-          />
-          <div className="slider-row">
-            <label>Classical Split</label>
-            <button
-              className={`toggle-btn ${showClassicalSplit ? 'active' : ''}`}
-              onClick={() => onShowClassicalSplitChange(!showClassicalSplit)}
-            >
-              {showClassicalSplit ? 'Split ON' : 'Show Classical Split'}
-            </button>
-          </div>
         </div>
       )}
 
       {params.demoMode === 'polarized' && (
         <div className="control-section">
-          <h4>Polarization Geometry</h4>
+          <h4>Polarization Type</h4>
           <div className="slider-row">
             <label>Mode</label>
             <select
@@ -132,18 +156,51 @@ export function ControlPanel({
         </div>
       )}
 
+      {/* ── Layer visibility — scene elements can be isolated for focused study ── */}
       <div className="control-section">
-        <h4>View Options</h4>
-        <div className="slider-row">
-          <label>Projection Planes</label>
-          <button
-            className={`toggle-btn ${showProjectionPlanes ? 'active' : ''}`}
-            onClick={() => onShowProjectionPlanesChange(!showProjectionPlanes)}
-            title="Show XY and XZ projections — classical views are slices of the full geometric state"
-          >
-            {showProjectionPlanes ? 'Planes ON' : 'Show Projections'}
-          </button>
-        </div>
+        <h4>Layers</h4>
+        <LayerToggle
+          label="Basis"
+          active={showBasis}
+          onToggle={() => onShowBasisChange(!showBasis)}
+          title={BASIS_TITLES[params.demoMode]}
+        />
+        {params.demoMode !== 'complex' && (
+          <LayerToggle
+            label="Trail History"
+            active={showTrailHistory}
+            onToggle={() => onShowTrailHistoryChange(!showTrailHistory)}
+            title="Show the temporal trail / 3D helix path of the signal"
+          />
+        )}
+        <LayerToggle
+          label="Projections"
+          active={showProjectionPlanes}
+          onToggle={() => onShowProjectionPlanesChange(!showProjectionPlanes)}
+          title="Show XY and XZ projection planes — classical 2D slices of the full geometric state"
+        />
+        {params.demoMode === 'quaternionic' && (
+          <>
+            <LayerToggle
+              label="Fiber Rings"
+              active={showFiber}
+              onToggle={() => onShowFiberChange(!showFiber)}
+              title="Show fiber circles along the trail — each encodes a hidden S¹ fiber (Hopf fibration concept)"
+            />
+            <LayerToggle
+              label="Local Frame"
+              active={showLocalFrame}
+              onToggle={() => onShowLocalFrameChange(!showLocalFrame)}
+              title="Show the local quaternion orientation frame (i, j, k axes) at the signal tip"
+            />
+          </>
+        )}
+        <LayerToggle
+          label="Spectrum"
+          active={showSpectrumPanel}
+          onToggle={() => onShowSpectrumPanelChange(!showSpectrumPanel)}
+          title="Show the coefficient / spectrum panel"
+        />
       </div>
     </div>
   );

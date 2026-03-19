@@ -14,17 +14,21 @@ interface MainSceneProps {
   currentTime: number;
   showClassicalSplit: boolean;
   showProjectionPlanes: boolean;
+  showBasis: boolean;
+  showTrailHistory: boolean;
+  showFiber: boolean;
+  showLocalFrame: boolean;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
 const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
-  // Front-on → flatness of the XY plane is immediately obvious
   complex:      [0, 0.3, 5.5],
-  // Angled to reveal the Z-depth of the helix
   polarized:    [4.0, 2.2, 4.0],
-  // Elevated and angled — shows 3D precession of the quaternionic state
   quaternionic: [3.2, 2.8, 4.5],
 };
+
+/** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
+const CAMERA_LERP_SPEED = 0.04;
 
 /** Smoothly lerps the camera toward the per-mode target position. */
 function CameraController({ demoMode }: { demoMode: DemoMode }) {
@@ -36,14 +40,17 @@ function CameraController({ demoMode }: { demoMode: DemoMode }) {
   }, [demoMode]);
 
   useFrame(() => {
-    camera.position.lerp(targetRef.current, 0.04);
+    camera.position.lerp(targetRef.current, CAMERA_LERP_SPEED);
     camera.lookAt(0, 0, 0);
   });
 
   return null;
 }
 
-function SceneContent({ params, currentTime, showClassicalSplit, showProjectionPlanes }: MainSceneProps) {
+function SceneContent({
+  params, currentTime, showClassicalSplit, showProjectionPlanes,
+  showBasis, showTrailHistory, showFiber, showLocalFrame,
+}: MainSceneProps) {
   const tip = computeSignalTip(params, currentTime);
 
   return (
@@ -51,10 +58,8 @@ function SceneContent({ params, currentTime, showClassicalSplit, showProjectionP
       <ambientLight intensity={0.25} />
       <pointLight position={[5, 5, 5]} intensity={0.9} />
 
-      {/* Dimmed starfield — atmospheric but subordinate to the geometry */}
       <Stars radius={80} depth={25} count={1200} factor={1.8} saturation={0} fade />
 
-      {/* Faint reference grid */}
       <Grid
         args={[8, 8]}
         position={[0, 0, 0]}
@@ -77,10 +82,21 @@ function SceneContent({ params, currentTime, showClassicalSplit, showProjectionP
       )}
 
       {params.demoMode === 'complex' && (
-        <ComplexSignalDemo params={params} currentTime={currentTime} tip={tip} />
+        <ComplexSignalDemo
+          params={params}
+          currentTime={currentTime}
+          tip={tip}
+          showBasis={showBasis}
+        />
       )}
       {params.demoMode === 'polarized' && (
-        <PolarizedSignalDemo params={params} currentTime={currentTime} tip={tip} />
+        <PolarizedSignalDemo
+          params={params}
+          currentTime={currentTime}
+          tip={tip}
+          showBasis={showBasis}
+          showTrailHistory={showTrailHistory}
+        />
       )}
       {params.demoMode === 'quaternionic' && (
         <QuaternionicSignalDemo
@@ -88,6 +104,9 @@ function SceneContent({ params, currentTime, showClassicalSplit, showProjectionP
           currentTime={currentTime}
           tip={tip}
           showClassicalSplit={showClassicalSplit}
+          showTrailHistory={showTrailHistory}
+          showFiber={showFiber}
+          showLocalFrame={showLocalFrame}
         />
       )}
 
