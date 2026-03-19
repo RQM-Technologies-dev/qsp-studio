@@ -41,6 +41,11 @@ interface QuaternionicSignalDemoProps {
    * Pitch rotation (radians, around X-axis) of the sensing frame.
    */
   receiverPitch?: number;
+  /**
+   * When true, render a small ring ripple at the current tip on the hypersphere
+   * boundary surface — shows the receiver manifold actively excited by the field.
+   */
+  showExcitation?: boolean;
 }
 
 /** Shared helper: compute the current quaternion from signal params + time. */
@@ -372,11 +377,95 @@ function FiberRings({ trail, currentTime, wComponent, opacity }: {
   );
 }
 
+/**
+ * Small glowing ring at the current tip position on the hypersphere boundary surface.
+ *
+ * The ring lives in the plane perpendicular to the radial tip direction, so it always
+ * wraps around the sphere surface at the contact point.  Its opacity pulses at the
+ * signal frequency, giving the impression of a ripple or shockwave propagating across
+ * the receiving boundary each time a field crest is captured.
+ *
+ * Visual intent: the hypersphere boundary is actively disturbed wherever the incoming
+ * field makes contact — the ring makes that disturbance spatially explicit.
+ */
+function BoundaryRipplePulse({ tip, params, currentTime, opacity }: {
+  tip: [number, number, number];
+  params: SignalParams;
+  currentTime: number;
+  opacity: number;
+}) {
+  const tipLen = Math.sqrt(tip[0] ** 2 + tip[1] ** 2 + tip[2] ** 2);
+  if (tipLen < 1e-10) return null;
+
+  // Radial unit vector at the tip
+  const tr: [number, number, number] = [tip[0] / tipLen, tip[1] / tipLen, tip[2] / tipLen];
+
+  // Choose a reference vector not parallel to tr (use Y unless tr ≈ ±Y)
+  const refVec: [number, number, number] = Math.abs(tr[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+
+  // u1 = tr × refVec  (in the perpendicular plane)
+  const u1raw: [number, number, number] = [
+    tr[1] * refVec[2] - tr[2] * refVec[1],
+    tr[2] * refVec[0] - tr[0] * refVec[2],
+    tr[0] * refVec[1] - tr[1] * refVec[0],
+  ];
+  const u1len = Math.sqrt(u1raw[0] ** 2 + u1raw[1] ** 2 + u1raw[2] ** 2);
+  const u1: [number, number, number] = [u1raw[0] / u1len, u1raw[1] / u1len, u1raw[2] / u1len];
+
+  // u2 = tr × u1  (second basis vector of the perpendicular plane)
+  const u2: [number, number, number] = [
+    tr[1] * u1[2] - tr[2] * u1[1],
+    tr[2] * u1[0] - tr[0] * u1[2],
+    tr[0] * u1[1] - tr[1] * u1[0],
+  ];
+
+  // Ring radius — subtle, scales with amplitude
+  const RING_R = params.amplitude * 0.20;
+  const N = 28;
+  const ringPts: [number, number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * 2 * Math.PI;
+    ringPts.push([
+      tip[0] + RING_R * (Math.cos(a) * u1[0] + Math.sin(a) * u2[0]),
+      tip[1] + RING_R * (Math.cos(a) * u1[1] + Math.sin(a) * u2[1]),
+      tip[2] + RING_R * (Math.cos(a) * u1[2] + Math.sin(a) * u2[2]),
+    ]);
+  }
+
+  // Envelope pulses at signal frequency — peaks when field is at maximum
+  const rawPhase = 2 * Math.PI * params.frequency * currentTime + params.phase;
+  const env = 0.35 + 0.65 * Math.abs(Math.sin(rawPhase));
+
+  return (
+    <group>
+      {/* Ripple ring around the tip on the sphere surface */}
+      <Line
+        points={ringPts}
+        color="#fbbf24"
+        lineWidth={2.2}
+        transparent
+        opacity={0.35 * env * opacity}
+      />
+      {/* Bright contact point at the tip itself */}
+      <mesh position={tip}>
+        <sphereGeometry args={[0.034, 8, 8]} />
+        <meshStandardMaterial
+          color="#f59e0b"
+          emissive="#fbbf24"
+          emissiveIntensity={5 * env}
+          transparent
+          opacity={0.60 * env * opacity}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 export function QuaternionicSignalDemo({
   params, currentTime, tip, showClassicalSplit,
   showTrailHistory, showFiber, showLocalFrame,
   showProjectionShadow, opacity = 1, couplingStrength = 1,
-  receiverYaw = 0, receiverPitch = 0,
+  receiverYaw = 0, receiverPitch = 0, showExcitation = false,
 }: QuaternionicSignalDemoProps) {
   const trail = generateTrail(params, currentTime, 2.5 / params.frequency, 180);
 
@@ -418,6 +507,16 @@ export function QuaternionicSignalDemo({
 
       {/* Local quaternion orientation frame — toggled by showLocalFrame */}
       {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={structureOpacity} />}
+
+      {/* Boundary ripple pulse — receiver hypersphere manifold excited by incoming field */}
+      {showExcitation && (
+        <BoundaryRipplePulse
+          tip={tip}
+          params={params}
+          currentTime={currentTime}
+          opacity={structureOpacity}
+        />
+      )}
     </group>
   );
 }

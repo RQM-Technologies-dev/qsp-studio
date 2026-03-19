@@ -29,9 +29,81 @@ interface PolarizedSignalDemoProps {
    * Pitch rotation (radians, around X-axis) of the sensing frame.
    */
   receiverPitch?: number;
+  /**
+   * When true, render a short glowing segment on the polarization ellipse near
+   * the current tip — shows the receiver manifold responding to the incoming field.
+   */
+  showExcitation?: boolean;
 }
 
-export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showTrailHistory, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0 }: PolarizedSignalDemoProps) {
+/**
+ * Short glowing segment on the polarization ellipse centered on the current tip angle.
+ *
+ * Visual intent: the ellipse lights up at the active capture location.  The segment
+ * follows the true ellipse geometry (same math as generatePolarizationPath) so it
+ * sits exactly on the reference manifold, not beside it.  A contact dot at the tip
+ * reinforces the "landing point" of the incoming field.
+ *
+ * Opacity is modulated by |sin θ| — peaks at the vertical extremes of the ellipse
+ * where the field amplitude is strongest on the minor axis.
+ */
+function EllipseExcitationPulse({ tip, params, currentTime, opacity }: {
+  tip: [number, number, number];
+  params: SignalParams;
+  currentTime: number;
+  opacity: number;
+}) {
+  const { amplitude, frequency, phase, ellipticity, polarization } = params;
+  const theta = 2 * Math.PI * frequency * currentTime + phase;
+  const SPAN_HALF = Math.PI / 5.5; // ≈ 32.7° each side → ~65° total
+  const N = 20;
+
+  // Short ellipse arc centered at current θ — same formula as generatePolarizationPath
+  const tracePts: [number, number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const a = theta - SPAN_HALF + (i / N) * SPAN_HALF * 2;
+    let x: number, y: number;
+    if (polarization === 'linear') {
+      x = amplitude * Math.cos(a); y = 0;
+    } else if (polarization === 'circular') {
+      x = amplitude * Math.cos(a); y = amplitude * Math.sin(a);
+    } else {
+      x = amplitude * Math.cos(a); y = amplitude * ellipticity * Math.sin(a);
+    }
+    tracePts.push([x, y, 0]);
+  }
+
+  // Envelope: peaks when vertical field component is strongest
+  const env = 0.35 + 0.65 * Math.abs(Math.sin(theta));
+
+  return (
+    <group>
+      {/* Bright short arc on the ellipse — excitation band */}
+      {tracePts.length >= 2 && (
+        <Line
+          points={tracePts}
+          color="#c4b5fd"
+          lineWidth={3.0}
+          transparent
+          opacity={0.30 * env * opacity}
+        />
+      )}
+      {/* Contact dot at the live tip position */}
+      <mesh position={tip}>
+        <sphereGeometry args={[0.034, 8, 8]} />
+        <meshStandardMaterial
+          color="#8b5cf6"
+          emissive="#c4b5fd"
+          emissiveIntensity={5 * env}
+          transparent
+          opacity={0.55 * env * opacity}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showTrailHistory, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0, showExcitation = false }: PolarizedSignalDemoProps) {
   const { amplitude, frequency, ellipticity, polarization } = params;
 
   // Trail dims and frame axes fade as coupling decreases — minimum 0.5 so
@@ -91,6 +163,16 @@ export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showT
 
       {/* Signal vector tip */}
       <SignalVector tip={tip} demoMode="polarized" opacity={frameOpacity} />
+
+      {/* Ellipse excitation pulse — receiver manifold responding to incoming field */}
+      {showExcitation && (
+        <EllipseExcitationPulse
+          tip={tip}
+          params={params}
+          currentTime={currentTime}
+          opacity={frameOpacity}
+        />
+      )}
     </group>
   );
 }

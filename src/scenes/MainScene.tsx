@@ -189,6 +189,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
       {currentMode === 'polarized' && (
@@ -202,6 +203,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
       {currentMode === 'quaternionic' && (
@@ -218,6 +220,7 @@ function SceneContent({
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
+          showExcitation={showIncomingWave}
         />
       )}
 

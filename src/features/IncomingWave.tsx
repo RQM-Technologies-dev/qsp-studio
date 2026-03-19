@@ -13,6 +13,10 @@ interface IncomingWaveProps {
    *   complex      → flat planar rim capture (XY-plane only)
    *   polarized    → 3-D tilt preserved (E- and B-field connectors shown)
    *   quaternionic → hyperspherical boundary ring (wave meets a ring, not a point)
+   *
+   * Falls back to `params.demoMode` if omitted, so callers may omit this
+   * when the wave params already carry the correct mode.  Prefer passing it
+   * explicitly (as MainScene does) to avoid ambiguity.
    */
   demoMode?: DemoMode;
   /**

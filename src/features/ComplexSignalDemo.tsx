@@ -32,9 +32,73 @@ interface ComplexSignalDemoProps {
    * Pitch rotation (radians, around X-axis) of the sensing frame.
    */
   receiverPitch?: number;
+  /**
+   * When true, render a short excitation arc on the unit-circle rim at the
+   * current phasor contact point — shows the receiver manifold responding to
+   * the incoming field.
+   */
+  showExcitation?: boolean;
 }
 
-export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress = 0, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0 }: ComplexSignalDemoProps) {
+/**
+ * Short glowing arc on the unit-circle rim centered on the current phasor tip.
+ *
+ * Visual intent: the rim lights up briefly at the capture point, giving a sense
+ * of the I/Q plane being actively energised by the incoming field.  The arc is
+ * narrow (±32°) and faint so it reads as a "hot spot" rather than a duplicate
+ * of the base circle.
+ *
+ * Opacity is modulated by |sin θ| (the Q-channel amplitude) — this peaks when
+ * the field is at its imaginary maximum, linking the glow to the field strength.
+ */
+function RimExcitationArc({ tip, amplitude, params, currentTime, opacity }: {
+  tip: [number, number, number];
+  amplitude: number;
+  params: SignalParams;
+  currentTime: number;
+  opacity: number;
+}) {
+  const tipAngle = Math.atan2(tip[1], tip[0]);
+  const ARC_HALF = Math.PI / 5.5; // ≈ 32.7° each side → ~65° total
+
+  // Short arc segment centered at the current phasor angle
+  const arcPts: [number, number, number][] = [];
+  const N = 22;
+  for (let i = 0; i <= N; i++) {
+    const a = tipAngle - ARC_HALF + (i / N) * ARC_HALF * 2;
+    arcPts.push([amplitude * Math.cos(a), amplitude * Math.sin(a), 0]);
+  }
+
+  // Envelope: signal phase drives a smooth pulse (0.35 – 1.0)
+  const rawPhase = 2 * Math.PI * params.frequency * currentTime + params.phase;
+  const env = 0.35 + 0.65 * Math.abs(Math.sin(rawPhase));
+
+  return (
+    <group>
+      {/* Bright narrow arc — the primary excitation band */}
+      <Line
+        points={arcPts}
+        color="#40e0ff"
+        lineWidth={3.0}
+        transparent
+        opacity={0.30 * env * opacity}
+      />
+      {/* Glowing dot at the phasor contact point — "field just landed here" */}
+      <mesh position={tip}>
+        <sphereGeometry args={[0.034, 8, 8]} />
+        <meshStandardMaterial
+          color="#00d4ff"
+          emissive="#00d4ff"
+          emissiveIntensity={5 * env}
+          transparent
+          opacity={0.55 * env * opacity}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+export function ComplexSignalDemo({ params, currentTime, tip, showBasis, helixMorphProgress = 0, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0, showExcitation = false }: ComplexSignalDemoProps) {
   const { amplitude } = params;
 
   // Reduce circle/phasor brightness when coupling weakens — minimum 0.55 so geometry
@@ -88,6 +152,17 @@ export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress =
 
       {/* Phasor: the rotating arm from origin to the I/Q unit-circle point */}
       <SignalVector tip={tip} demoMode="complex" opacity={glowOpacity} />
+
+      {/* Rim excitation arc — receiver manifold responding to incoming field */}
+      {showExcitation && (
+        <RimExcitationArc
+          tip={tip}
+          amplitude={amplitude}
+          params={params}
+          currentTime={currentTime}
+          opacity={glowOpacity}
+        />
+      )}
     </group>
   );
 }
