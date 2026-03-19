@@ -53,7 +53,7 @@ function CameraController({ demoMode, morphProgress }: { demoMode: DemoMode; mor
   morphProgressRef.current = morphProgress;
 
   useFrame(() => {
-    // Once the transition is complete, stop fighting OrbitControls
+    // Transition complete — release camera to OrbitControls (user can rotate freely)
     if (morphProgressRef.current >= 1) return;
     camera.position.lerp(targetRef.current, CAMERA_LERP_SPEED);
     camera.lookAt(0, 0, 0);

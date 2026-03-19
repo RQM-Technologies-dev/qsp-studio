@@ -7,9 +7,14 @@ import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
+import { SignalBuffer, sampleSignal, BUFFER_SIZE, SAMPLE_INTERVAL_MS } from '../math/signalBuffer';
+import { computeSpectrum, SpectrumData } from '../math/dft';
 
 /** How long (in wall-clock seconds) a mode morph transition lasts. */
 const MORPH_DURATION = 1.5;
+
+/** How often (wall-clock ms) the DFT is re-computed. 10 Hz = 100 ms. */
+const DFT_INTERVAL_MS = 100;
 
 export default function App() {
   const [params, setParams] = useState<SignalParams>(defaultSignalParams);
@@ -39,6 +44,15 @@ export default function App() {
   const sweepModeRef = useRef<SweepMode>('none');
   const geometryAngleRef = useRef(0);
 
+  // ── Signal time ref (mirrors currentTime state, accessible in RAF) ──────
+  const currentTimeRef = useRef(0);
+
+  // ── Time-series buffer + DFT state ───────────────────────────────────────
+  // params must be readable inside the RAF loop without stale closure issues
+  const paramsRef = useRef<SignalParams>(defaultSignalParams);
+  const signalBufferRef = useRef(new SignalBuffer(BUFFER_SIZE));
+  const [spectrumData, setSpectrumData] = useState<SpectrumData | null>(null);
+
   useEffect(() => {
     animSpeedRef.current = animSpeed;
   }, [animSpeed]);
@@ -46,6 +60,11 @@ export default function App() {
   useEffect(() => {
     sweepModeRef.current = sweepMode;
   }, [sweepMode]);
+
+  // Keep paramsRef in sync so the RAF loop can read current params
+  useEffect(() => {
+    paramsRef.current = params;
+  }, [params]);
 
   const animate = useCallback((timestamp: number) => {
     if (lastTimeRef.current === null) lastTimeRef.current = timestamp;
@@ -55,22 +74,29 @@ export default function App() {
     const mode = sweepModeRef.current;
 
     if (mode !== 'geometry-only') {
-      setCurrentTime((t) => t + dt * animSpeedRef.current);
+      // Mutate ref synchronously so the sampling setInterval (below) reads
+      // the current signal time immediately, not the previous frame's value.
+      currentTimeRef.current += dt * animSpeedRef.current;
+      setCurrentTime(currentTimeRef.current);
     }
 
     if (mode === 'geometry-only') {
       geometryAngleRef.current += dt * 0.55;
       const a = geometryAngleRef.current;
-      setParams((prev) => ({
-        ...prev,
-        demoMode: 'quaternionic',
-        orientationX: Math.sin(a * 1.3) * 0.7,
-        orientationY: Math.cos(a * 0.8) * 0.5,
-        orientationZ: Math.cos(a),
-      }));
+      setParams((prev) => {
+        const next = {
+          ...prev,
+          demoMode: 'quaternionic' as DemoMode,
+          orientationX: Math.sin(a * 1.3) * 0.7,
+          orientationY: Math.cos(a * 0.8) * 0.5,
+          orientationZ: Math.cos(a),
+        };
+        paramsRef.current = next;
+        return next;
+      });
     }
 
-    // Advance morph progress using wall-clock dt (independent of animSpeed)
+    // ── Morph progress ────────────────────────────────────────────────────
     if (isMorphingRef.current) {
       morphProgressRef.current = Math.min(1, morphProgressRef.current + dt / MORPH_DURATION);
       setMorphProgress(morphProgressRef.current);
@@ -88,6 +114,29 @@ export default function App() {
     return () => cancelAnimationFrame(rafRef.current);
   }, [animate]);
 
+  // ── Signal sampling — setInterval at SAMPLE_RATE_HZ ─────────────────────
+  // Runs independently of the RAF so it fires at a consistent rate regardless
+  // of browser throttling (e.g. in headless test environments).
+  useEffect(() => {
+    const id = setInterval(() => {
+      signalBufferRef.current.push(
+        sampleSignal(paramsRef.current, currentTimeRef.current),
+      );
+    }, SAMPLE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── DFT update — setInterval at ~10 Hz ───────────────────────────────────
+  // Also decoupled from RAF so the spectrum updates at a predictable rate.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const samples = signalBufferRef.current.getAll();
+      const result = computeSpectrum(samples, paramsRef.current.frequency);
+      if (result !== null) setSpectrumData(result);
+    }, DFT_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
   const handleParamsChange = (partial: Partial<SignalParams>) => {
     setParams((prev) => ({ ...prev, ...partial }));
   };
@@ -100,6 +149,9 @@ export default function App() {
     setParams((prev) => ({ ...prev, demoMode: mode }));
     if (mode !== 'quaternionic') setShowClassicalSplit(false);
     setSweepMode('none');
+    // Clear buffer on mode change so the DFT reflects only the new mode
+    signalBufferRef.current.clear();
+    setSpectrumData(null);
   };
 
   const handleSweepModeChange = (mode: SweepMode) => {
@@ -143,7 +195,7 @@ export default function App() {
         />
         <InfoOverlay demoMode={params.demoMode} />
         {showSpectrumPanel && (
-          <SpectrumPanel params={params} currentTime={currentTime} />
+          <SpectrumPanel params={params} spectrumData={spectrumData} />
         )}
         <StatusStrip params={params} currentTime={currentTime} animSpeed={animSpeed} sweepMode={sweepMode} />
       </div>
