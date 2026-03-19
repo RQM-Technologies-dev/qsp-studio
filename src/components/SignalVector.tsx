@@ -6,6 +6,8 @@ interface SignalVectorProps {
   demoMode: DemoMode;
   /** When true, uses stronger glow and larger tip sphere for quaternionic emphasis. */
   enhanced?: boolean;
+  /** Opacity multiplier applied during mode-morph fade transitions (0–1). */
+  opacity?: number;
 }
 
 const modeColors: Record<DemoMode, string> = {
@@ -14,7 +16,7 @@ const modeColors: Record<DemoMode, string> = {
   quaternionic: '#f59e0b',
 };
 
-export function SignalVector({ tip, demoMode, enhanced = false }: SignalVectorProps) {
+export function SignalVector({ tip, demoMode, enhanced = false, opacity = 1 }: SignalVectorProps) {
   const color = modeColors[demoMode];
   const [tx, ty, tz] = tip;
   const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
@@ -30,6 +32,8 @@ export function SignalVector({ tip, demoMode, enhanced = false }: SignalVectorPr
         points={[[0, 0, 0], tip]}
         color={color}
         lineWidth={lineWidth}
+        transparent
+        opacity={opacity}
       />
       <mesh position={tip}>
         <sphereGeometry args={[tipRadius, 20, 20]} />
@@ -37,6 +41,8 @@ export function SignalVector({ tip, demoMode, enhanced = false }: SignalVectorPr
           color={color}
           emissive={color}
           emissiveIntensity={emissiveIntensity}
+          transparent
+          opacity={opacity}
         />
       </mesh>
     </group>

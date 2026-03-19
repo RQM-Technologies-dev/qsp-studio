@@ -507,7 +507,7 @@ body {
   position: absolute;
   bottom: 3.2rem;         /* sit above the status strip */
   left: 1rem;
-  width: 220px;
+  width: 260px;
   background: rgba(10, 10, 22, 0.88);
   border: 1px solid rgba(0, 212, 255, 0.15);
   border-radius: 6px;
@@ -515,6 +515,52 @@ body {
   padding: 0.55rem 0.7rem 0.5rem;
   pointer-events: none;
   user-select: none;
+}
+
+/* ── Transform pipeline header ────────────────────────────────────────────
+   A compact "Signal → Basis → Coefficients" strip that makes the user feel
+   they are watching a staged transform process feed live into the scene.  */
+.pipeline-header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 0.45rem;
+  flex-wrap: nowrap;
+}
+
+.pipeline-stage-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.pipeline-stage {
+  font-size: 0.55rem;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  padding: 0.1rem 0.22rem;
+  border-radius: 3px;
+  transition: color 0.3s, background 0.3s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-stage.active {
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.pipeline-arrow {
+  font-size: 0.52rem;
+  color: var(--text-dim);
+  opacity: 0.4;
+  padding: 0 0.08rem;
+  flex-shrink: 0;
 }
 
 .spectrum-header {
@@ -594,6 +640,49 @@ body {
   text-align: center;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 0.35rem;
+}
+
+/* Buffer-fill micro-indicator in pipeline header */
+.pipeline-fill {
+  margin-left: auto;
+  font-size: 0.5rem;
+  color: var(--text-dim);
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+/* Collecting state — thin progress bar replacing the bar chart */
+.spectrum-collecting {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: auto 0;
+}
+
+.spectrum-collecting-bar {
+  height: 100%;
+  background: var(--cyan);
+  border-radius: 2px;
+  opacity: 0.45;
+  transition: width 0.2s linear;
+}
+
+/* Thin buffer-fill progress stripe shown while buffer accumulates (< 128 pts) */
+.spectrum-buffer-track {
+  margin-top: 0.25rem;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.spectrum-buffer-fill {
+  height: 100%;
+  background: var(--cyan);
+  opacity: 0.25;
+  transition: width 0.3s linear;
 }
 
 /* ── Info overlay component list: label + note side by side ─────────────── */

@@ -1,109 +1,175 @@
-import { SignalParams } from '../math/signal';
-import { quatFromAxisAngle, Vec3 } from '../math/quaternion';
+import { SignalParams, DemoMode } from '../math/signal';
+import { SpectrumData, MIN_DFT_SAMPLES } from '../math/dft';
+import { BUFFER_SIZE } from '../math/signalBuffer';
+
+const MODE_LABEL: Record<DemoMode, string> = {
+  complex:      'DFT Magnitude Spectrum',
+  polarized:    'Spatial Channel Spectrum',
+  quaternionic: 'QFT Quaternionic Coefficients',
+};
+
+/**
+ * The three stages of the signal-transform pipeline.
+ * The active stage is highlighted to show where the current mode sits.
+ */
+const PIPELINE_STAGES: { key: string; label: string; activeFor: DemoMode[] }[] = [
+  { key: 'signal', label: 'Signal',      activeFor: ['complex'] },
+  { key: 'basis',  label: 'Basis',       activeFor: ['polarized'] },
+  { key: 'coeffs', label: 'Coefficients', activeFor: ['quaternionic'] },
+];
+
+/** Hover caption per mode — ties each view to its signal-processing meaning. */
+const MODE_CAPTION: Record<DemoMode, string> = {
+  complex:      'DFT: projection onto planar I/Q rotating modes',
+  polarized:    'DFT: projection onto spatial oscillation modes',
+  quaternionic: 'QFT: projection onto unified geometric (quaternionic) modes',
+};
 
 interface SpectrumBar {
   label: string;
-  /** Normalised value 0–1. */
-  value: number;
+  value: number;   // 0–1 normalised
   color: string;
-  description: string;
+  title: string;
 }
 
-function computeBars(params: SignalParams, currentTime: number): SpectrumBar[] {
-  const {
-    amplitude, frequency, phase, ellipticity, polarization, demoMode,
-    orientationX, orientationY, orientationZ,
-  } = params;
-  const theta = 2 * Math.PI * frequency * currentTime + phase;
+// ── Bar colours ──────────────────────────────────────────────────────────────
+const HARMONIC_COLORS = ['#4488aa', '#00d4ff', '#00aaff', '#0088cc', '#006699', '#004466'];
+const SPATIAL_COLORS  = { x: '#ff6688', y: '#55ee88', z: '#5588ff' };
+const QUAT_COLORS     = { w: '#f59e0b', i: '#ff6688', j: '#55ee88', k: '#5588ff' };
 
-  if (demoMode === 'complex') {
-    // The complex sinusoid A·e^{iθ} — only one frequency bin is non-zero.
-    // Show magnitude (static) + live Re/Im projections.
-    const reNorm = Math.abs(Math.cos(theta));
-    const imNorm = Math.abs(Math.sin(theta));
+function buildBars(mode: DemoMode, data: SpectrumData): SpectrumBar[] {
+  if (mode === 'complex') {
+    const { labels, magnitudes } = data.classical;
+    return labels.map((label, i) => ({
+      label,
+      value: magnitudes[i] ?? 0,
+      color: HARMONIC_COLORS[i % HARMONIC_COLORS.length],
+      title:
+        i === 0
+          ? 'DC component — mean signal level (zero for pure sinusoid)'
+          : i === 1
+          ? 'Fundamental frequency f — the carrier'
+          : `${i}× harmonic — nonlinear distortion component`,
+    }));
+  }
+
+  if (mode === 'polarized') {
+    const { x, y, z } = data.polarized;
     return [
-      { label: 'Magnitude', value: amplitude, color: '#00d4ff',  description: 'Signal amplitude A' },
-      { label: '|Re|',      value: reNorm,    color: '#ff5566',  description: 'Real part |cos θ|' },
-      { label: '|Im|',      value: imNorm,    color: '#44ee88',  description: 'Imaginary part |sin θ|' },
+      { label: 'X(f)', value: x, color: SPATIAL_COLORS.x, title: 'EM field X-axis amplitude at carrier frequency' },
+      { label: 'Y(f)', value: y, color: SPATIAL_COLORS.y, title: 'EM field Y-axis amplitude at carrier frequency' },
+      { label: 'Z(f)', value: z, color: SPATIAL_COLORS.z, title: 'EM field Z-axis amplitude at carrier frequency' },
     ];
   }
 
-  if (demoMode === 'polarized') {
-    // Three geometric coefficients describe the polarization ellipse.
-    const minorB =
-      polarization === 'linear'    ? 0 :
-      polarization === 'circular'  ? amplitude :
-      amplitude * ellipticity;
-    const bNorm = amplitude > 0 ? minorB / amplitude : 0;
-    return [
-      { label: 'Major a',     value: amplitude,   color: '#e879f9', description: 'Semi-major axis length' },
-      { label: 'Minor b',     value: bNorm,       color: '#a78bfa', description: 'Semi-minor axis fraction b/a' },
-      { label: 'Ellipticity', value: ellipticity, color: '#c4b5fd', description: 'Ratio b/a (0 = linear, 1 = circular)' },
-    ];
-  }
-
-  // Quaternionic mode — four component bars.
-  // q = quatFromAxisAngle(n̂, θ·0.3) = [cos(θ·0.15), sin(θ·0.15)·n̂]
-  const axis: Vec3 = [orientationX, orientationY, orientationZ];
-  const axisLen = Math.sqrt(axis[0] ** 2 + axis[1] ** 2 + axis[2] ** 2);
-  const normAxis: Vec3 = axisLen > 1e-10
-    ? [axis[0] / axisLen, axis[1] / axisLen, axis[2] / axisLen]
-    : [0, 0, 1];
-  const q = quatFromAxisAngle(normAxis, theta * 0.3);
-  // Note: |w|²+|x|²+|y|²+|z|² = 1 always for a unit quaternion.
+  // Quaternionic
+  const { w, i, j, k } = data.quaternionic;
   return [
-    { label: 'w (scalar)', value: Math.abs(q[0]), color: '#f59e0b', description: 'Scalar / real component of q = cos(θ·0.15)' },
-    { label: 'i (axis-x)', value: Math.abs(q[1]), color: '#ff6688', description: 'x-component of vector part: nx · sin(θ·0.15)' },
-    { label: 'j (axis-y)', value: Math.abs(q[2]), color: '#55ee88', description: 'y-component of vector part: ny · sin(θ·0.15)' },
-    { label: 'k (axis-z)', value: Math.abs(q[3]), color: '#5588ff', description: 'z-component of vector part: nz · sin(θ·0.15)' },
+    { label: 'w(f)', value: w, color: QUAT_COLORS.w, title: 'QFT scalar component at carrier frequency — rotation magnitude' },
+    { label: 'i(f)', value: i, color: QUAT_COLORS.i, title: 'QFT i-component at carrier frequency — x-axis field orientation' },
+    { label: 'j(f)', value: j, color: QUAT_COLORS.j, title: 'QFT j-component at carrier frequency — y-axis field orientation' },
+    { label: 'k(f)', value: k, color: QUAT_COLORS.k, title: 'QFT k-component at carrier frequency — propagation axis' },
   ];
 }
 
-const MODE_LABEL: Record<string, string> = {
-  complex:      'Planar Frequency',
-  polarized:    'Polarization State',
-  quaternionic: 'Quaternionic Coefficients',
-};
-
 interface SpectrumPanelProps {
   params: SignalParams;
-  currentTime: number;
+  spectrumData: SpectrumData | null;
 }
 
-export function SpectrumPanel({ params, currentTime }: SpectrumPanelProps) {
-  const bars = computeBars(params, currentTime);
+export function SpectrumPanel({ params, spectrumData }: SpectrumPanelProps) {
+  const mode = params.demoMode;
+
+  const bars: SpectrumBar[] = spectrumData ? buildBars(mode, spectrumData) : [];
+  const bufferFill = spectrumData?.bufferFill ?? 0;
+  const isCollecting = bufferFill < MIN_DFT_SAMPLES;
+
+  // Labels for the bottom note
+  let note: string;
+  if (isCollecting) {
+    note = `Collecting samples… ${bufferFill}/${MIN_DFT_SAMPLES}`;
+  } else if (mode === 'complex') {
+    note = `DFT (${bufferFill}pts) -- spike at f = pure carrier`;
+  } else if (mode === 'polarized') {
+    note = `EM field projection at carrier f (${params.frequency.toFixed(1)} Hz)`;
+  } else {
+    note = `QFT i-axis (${bufferFill}pts) -- 4 components at carrier f`;
+  }
 
   return (
     <div className="spectrum-panel">
+
+      {/* ── Transform pipeline header ─────────────────────────────────────── */}
+      <div className="pipeline-header" title={MODE_CAPTION[mode]}>
+        {PIPELINE_STAGES.map((stage, idx) => {
+          const isActive = stage.activeFor.includes(mode);
+          return (
+            <span key={stage.key} className="pipeline-stage-group">
+              <span className={`pipeline-stage ${isActive ? 'active' : ''}`}>
+                {stage.label}
+              </span>
+              {idx < PIPELINE_STAGES.length - 1 && (
+                <span className="pipeline-arrow">→</span>
+              )}
+            </span>
+          );
+        })}
+        {/* Buffer fill micro-indicator */}
+        {!spectrumData?.isStable && (
+          <span className="pipeline-fill" title={`Buffer: ${bufferFill}/${BUFFER_SIZE} samples`}>
+            {Math.round((bufferFill / BUFFER_SIZE) * 100)}%
+          </span>
+        )}
+      </div>
+
+      {/* ── Spectrum label row ────────────────────────────────────────────── */}
       <div className="spectrum-header">
         <span className="spectrum-title">SPECTRUM</span>
-        <span className="spectrum-mode-label">{MODE_LABEL[params.demoMode]}</span>
+        <span className="spectrum-mode-label">{MODE_LABEL[mode]}</span>
       </div>
 
-      <div className="spectrum-bars">
-        {bars.map((bar, i) => (
-          <div key={i} className="spectrum-bar-group" title={bar.description}>
-            <div className="spectrum-bar-track">
-              <div
-                className="spectrum-bar-fill"
-                style={{ height: `${Math.min(1, Math.max(0, bar.value)) * 100}%`, background: bar.color }}
-              />
-            </div>
-            <span className="spectrum-bar-label" style={{ color: bar.color }}>{bar.label}</span>
-            <span className="spectrum-bar-value">{bar.value.toFixed(2)}</span>
+      {/* ── Bars ──────────────────────────────────────────────────────────── */}
+      <div className="spectrum-bars" style={{ minHeight: 72 }}>
+        {isCollecting ? (
+          <div className="spectrum-collecting">
+            <div
+              className="spectrum-collecting-bar"
+              style={{ width: `${(bufferFill / MIN_DFT_SAMPLES) * 100}%` }}
+            />
           </div>
-        ))}
+        ) : (
+          bars.map((bar, i) => (
+            <div key={i} className="spectrum-bar-group" title={bar.title}>
+              <div className="spectrum-bar-track">
+                <div
+                  className="spectrum-bar-fill"
+                  style={{
+                    height: `${Math.min(1, Math.max(0, bar.value)) * 100}%`,
+                    background: bar.color,
+                  }}
+                />
+              </div>
+              <span className="spectrum-bar-label" style={{ color: bar.color }}>
+                {bar.label}
+              </span>
+              <span className="spectrum-bar-value">{bar.value.toFixed(2)}</span>
+            </div>
+          ))
+        )}
       </div>
 
-      {params.demoMode === 'quaternionic' && (
-        <p className="spectrum-note">|w|² + |i|² + |j|² + |k|² = 1</p>
-      )}
-      {params.demoMode === 'complex' && (
-        <p className="spectrum-note">One frequency, one complex coefficient</p>
-      )}
-      {params.demoMode === 'polarized' && (
-        <p className="spectrum-note">Geometric coefficients of the ellipse</p>
+      <p className="spectrum-note">{note}</p>
+
+      {/* Progress stripe: fills as buffer accumulates samples */}
+      {!spectrumData?.isStable && !isCollecting && (
+        <div className="spectrum-buffer-track">
+          <div
+            className="spectrum-buffer-fill"
+            style={{ width: `${(bufferFill / BUFFER_SIZE) * 100}%` }}
+          />
+        </div>
       )}
     </div>
   );
 }
+
