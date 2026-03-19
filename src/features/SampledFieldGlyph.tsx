@@ -3,7 +3,6 @@ import { SignalParams, DemoMode } from '../math/signal';
 import {
   computeReceiverBasis,
   projectFieldOntoReceiver,
-  computeWavePhaseAtReceiver,
   E_FIELD_SCALE,
   B_FIELD_SCALE,
 } from '../math/receiverBasis';
@@ -26,15 +25,18 @@ const GLYPH_SCALE = 0.46;
 const dot3 = (a: Vec3, b: Vec3) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 
 /**
- * Tiny mode-aware field readout at the receiver.
+ * Tiny mode-aware field projection overlay at the main representation.
  *
- * Shows:
- * 1. The incoming E-field vector (translucent white) at the receiver position.
- * 2. The receiver's I-axis (j_r, red) and Q-axis (k_r, green) in world space.
- * 3. The projected component arrows along each axis (brighter, coloured).
+ * Shows how the incoming EM field is resolved directly into the sensing
+ * basis of the main geometric structure (unit circle / polarization frame /
+ * quaternionic local frame).
+ *
+ * 1. The incoming E-field vector (translucent white) at the geometry origin.
+ * 2. The sensing frame's I-axis (j_r, red) and Q-axis (k_r, green) in world space.
+ * 3. The projected component arrows along each sensing axis (brighter, coloured).
  * 4. Faint projection lines connecting the E-field tip to each projected point.
  *
- * Rotating the receiver via yaw/pitch changes which components are extracted,
+ * Rotating the sensing frame via yaw/pitch changes which components are extracted,
  * making the encoding physically frame-dependent.
  */
 export function SampledFieldGlyph({
@@ -48,15 +50,16 @@ export function SampledFieldGlyph({
 }: SampledFieldGlyphProps) {
   const [px, py, pz] = position;
 
-  // ── Incoming field at receiver position ────────────────────────────────
-  const phase = computeWavePhaseAtReceiver(params.frequency, currentTime, params.phase);
+  // ── Incoming field at the main representation position (origin, x=0) ────
+  // The wave phase at origin simplifies to: -2π * f * t + phase
+  const phase = -2 * Math.PI * params.frequency * currentTime + params.phase;
   const eAmp = params.amplitude * E_FIELD_SCALE;
   const bAmp = params.amplitude * B_FIELD_SCALE;
 
   const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];           // E oscillates in Y
   const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];           // B oscillates in Z
 
-  // ── Receiver local basis in world space ────────────────────────────────
+  // ── Sensing frame local basis in world space ────────────────────────────────
   const basis = computeReceiverBasis(receiverYaw, receiverPitch);
   const { jAxis, kAxis } = basis;
 

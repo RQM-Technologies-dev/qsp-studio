@@ -20,9 +20,18 @@ interface PolarizedSignalDemoProps {
    * receiver alignment reduces the captured polarization structure.
    */
   couplingStrength?: number;
+  /**
+   * Yaw rotation (radians, around Y-axis) of the sensing frame.
+   * Rotates the entire polarization geometry so it visibly acts as the receiving structure.
+   */
+  receiverYaw?: number;
+  /**
+   * Pitch rotation (radians, around X-axis) of the sensing frame.
+   */
+  receiverPitch?: number;
 }
 
-export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showTrailHistory, opacity = 1, couplingStrength = 1 }: PolarizedSignalDemoProps) {
+export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showTrailHistory, opacity = 1, couplingStrength = 1, receiverYaw = 0, receiverPitch = 0 }: PolarizedSignalDemoProps) {
   const { amplitude, frequency, ellipticity, polarization } = params;
 
   // Trail dims and frame axes fade as coupling decreases — minimum 0.5 so
@@ -48,7 +57,7 @@ export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showT
   const normalLen = 0.55;
 
   return (
-    <>
+    <group rotation={[receiverPitch, receiverYaw, 0]}>
       {/* 3D helix trail — toggled by showTrailHistory */}
       {showTrailHistory && helixTrail.length >= 2 && (
         <Line points={helixTrail} color="#8b5cf6" lineWidth={2.5} transparent opacity={0.8 * trailOpacity} />
@@ -82,6 +91,6 @@ export function PolarizedSignalDemo({ params, currentTime, tip, showBasis, showT
 
       {/* Signal vector tip */}
       <SignalVector tip={tip} demoMode="polarized" opacity={frameOpacity} />
-    </>
+    </group>
   );
 }

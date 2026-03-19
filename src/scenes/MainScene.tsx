@@ -1,4 +1,4 @@
-import { MutableRefObject, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, Grid } from '@react-three/drei';
 import { Vector3 } from 'three';
@@ -7,12 +7,9 @@ import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
 import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
 import { IncomingWave } from '../features/IncomingWave';
-import { ReceiverNode } from '../features/ReceiverNode';
-import { ReceptionLink } from '../features/ReceptionLink';
 import { SampledFieldGlyph } from '../features/SampledFieldGlyph';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
 import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
-import { RECEIVER_X } from '../math/receiverBasis';
 
 interface MainSceneProps {
   params: SignalParams;
@@ -27,7 +24,6 @@ interface MainSceneProps {
   showIncomingWave: boolean;
   receiverYaw: number;
   receiverPitch: number;
-  sampleFlashRef: MutableRefObject<number>;
   /** Normalized coupling strength [0,1]; scales geometry amplitude when wave layer active. */
   couplingStrength: number;
   /** 0 = transition just started, 1 = fully transitioned. */
@@ -42,9 +38,6 @@ const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
   polarized:    [4.0, 2.2, 4.0],
   quaternionic: [3.2, 2.8, 4.5],
 };
-
-/** Position of the receiver node — left of the origin, perpendicular to the incoming wave. */
-const RECEIVER_POSITION: [number, number, number] = [RECEIVER_X, 0, 0];
 
 /** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
 const CAMERA_LERP_SPEED = 0.06;
@@ -80,7 +73,7 @@ function SceneContent({
   params, currentTime, showClassicalSplit, showProjectionPlanes,
   showBasis, showTrailHistory, showFiber, showLocalFrame,
   showProjectionShadow, showIncomingWave, receiverYaw, receiverPitch,
-  sampleFlashRef, couplingStrength, morphProgress, prevMode,
+  couplingStrength, morphProgress, prevMode,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
   // coupling metric so the main geometry visibly weakens with misalignment.
@@ -184,6 +177,8 @@ function SceneContent({
           showBasis={showBasis}
           couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
+          receiverYaw={receiverYaw}
+          receiverPitch={receiverPitch}
         />
       )}
       {currentMode === 'polarized' && (
@@ -195,6 +190,8 @@ function SceneContent({
           showTrailHistory={showTrailHistory}
           couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
+          receiverYaw={receiverYaw}
+          receiverPitch={receiverPitch}
         />
       )}
       {currentMode === 'quaternionic' && (
@@ -209,33 +206,27 @@ function SceneContent({
           showProjectionShadow={showProjectionShadow}
           couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
+          receiverYaw={receiverYaw}
+          receiverPitch={receiverPitch}
         />
       )}
 
-      {/* ── Incoming wave reception layer — toggled by showIncomingWave ───── */}
+      {/* ── Incoming wave direct-reception layer — toggled by showIncomingWave ── */}
+      {/* The wave now propagates directly to the main representation at the origin. */}
+      {/* The geometry itself is the receiver: no separate antenna or pipeline. */}
       {showIncomingWave && (
         <>
           <IncomingWave
             params={params}
             currentTime={currentTime}
-            receiverX={RECEIVER_X}
+            receiverX={0}
           />
-          <ReceiverNode
-            position={RECEIVER_POSITION}
-            yaw={receiverYaw}
-            pitch={receiverPitch}
-            sampleFlashRef={sampleFlashRef}
-          />
-          <ReceptionLink
-            receiverPos={RECEIVER_POSITION}
-            targetPos={[0, 0, 0]}
-            demoMode={currentMode}
-            currentTime={currentTime}
-          />
+          {/* Field projection overlay at origin — shows how the incoming field */}
+          {/* is resolved directly into the sensing basis of the main geometry.  */}
           <SampledFieldGlyph
             params={params}
             currentTime={currentTime}
-            position={RECEIVER_POSITION}
+            position={[0, 0, 0]}
             demoMode={currentMode}
             receiverYaw={receiverYaw}
             receiverPitch={receiverPitch}

@@ -227,14 +227,14 @@ export function ControlPanel({
           label="Incoming Wave"
           active={showIncomingWave}
           onToggle={() => onShowIncomingWaveChange(!showIncomingWave)}
-          title="Show the incoming electromagnetic wave arriving at the receiver, and how it is encoded into the current geometric representation"
+          title="Show the incoming electromagnetic wave arriving directly at the geometric representation, and how the field is encoded into the current sensing frame"
         />
       </div>
 
-      {/* ── Receiver Orientation — shown only when the incoming wave layer is active ── */}
+      {/* ── Sensing Frame Orientation — shown only when the incoming wave layer is active ── */}
       {showIncomingWave && (
         <div className="control-section">
-          <h4>Receiver Orientation</h4>
+          <h4>Sensing Frame Orientation</h4>
           <Slider
             label="Yaw (°)"
             value={Math.round(receiverYaw * (180 / Math.PI))}
