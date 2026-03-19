@@ -8,6 +8,9 @@ import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 
+/** How long (in wall-clock seconds) a mode morph transition lasts. */
+const MORPH_DURATION = 1.5;
+
 export default function App() {
   const [params, setParams] = useState<SignalParams>(defaultSignalParams);
   const [currentTime, setCurrentTime] = useState(0);
@@ -22,6 +25,13 @@ export default function App() {
   const [showFiber, setShowFiber] = useState(true);
   const [showLocalFrame, setShowLocalFrame] = useState(true);
   const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
+  const [showProjectionShadow, setShowProjectionShadow] = useState(false);
+
+  // ── Mode morph state ─────────────────────────────────────────────────────
+  const [morphProgress, setMorphProgress] = useState(1);
+  const [prevMode, setPrevMode] = useState<DemoMode>(defaultSignalParams.demoMode);
+  const morphProgressRef = useRef(1);
+  const isMorphingRef = useRef(false);
 
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number | null>(null);
@@ -60,6 +70,15 @@ export default function App() {
       }));
     }
 
+    // Advance morph progress using wall-clock dt (independent of animSpeed)
+    if (isMorphingRef.current) {
+      morphProgressRef.current = Math.min(1, morphProgressRef.current + dt / MORPH_DURATION);
+      setMorphProgress(morphProgressRef.current);
+      if (morphProgressRef.current >= 1) {
+        isMorphingRef.current = false;
+      }
+    }
+
     rafRef.current = requestAnimationFrame(animate);
   }, []);
 
@@ -74,6 +93,10 @@ export default function App() {
   };
 
   const handleModeChange = (mode: DemoMode) => {
+    setPrevMode(params.demoMode);
+    morphProgressRef.current = 0;
+    isMorphingRef.current = true;
+    setMorphProgress(0);
     setParams((prev) => ({ ...prev, demoMode: mode }));
     if (mode !== 'quaternionic') setShowClassicalSplit(false);
     setSweepMode('none');
@@ -114,6 +137,9 @@ export default function App() {
           showTrailHistory={showTrailHistory}
           showFiber={showFiber}
           showLocalFrame={showLocalFrame}
+          showProjectionShadow={showProjectionShadow}
+          morphProgress={morphProgress}
+          prevMode={prevMode}
         />
         <InfoOverlay demoMode={params.demoMode} />
         {showSpectrumPanel && (
@@ -131,6 +157,7 @@ export default function App() {
         showFiber={showFiber}
         showLocalFrame={showLocalFrame}
         showSpectrumPanel={showSpectrumPanel}
+        showProjectionShadow={showProjectionShadow}
         sweepMode={sweepMode}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
@@ -141,6 +168,7 @@ export default function App() {
         onShowFiberChange={setShowFiber}
         onShowLocalFrameChange={setShowLocalFrame}
         onShowSpectrumPanelChange={setShowSpectrumPanel}
+        onShowProjectionShadowChange={setShowProjectionShadow}
       />
     </div>
   );

@@ -18,6 +18,11 @@ interface MainSceneProps {
   showTrailHistory: boolean;
   showFiber: boolean;
   showLocalFrame: boolean;
+  showProjectionShadow: boolean;
+  /** 0 = transition just started, 1 = fully transitioned. */
+  morphProgress: number;
+  /** The mode we are transitioning away from. */
+  prevMode: DemoMode;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
@@ -28,18 +33,28 @@ const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
 };
 
 /** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
-const CAMERA_LERP_SPEED = 0.04;
+const CAMERA_LERP_SPEED = 0.06;
 
-/** Smoothly lerps the camera toward the per-mode target position. */
-function CameraController({ demoMode }: { demoMode: DemoMode }) {
+/**
+ * Smoothly lerps the camera toward the per-mode target position only while a
+ * mode transition is in progress (morphProgress < 1).  Once the transition
+ * completes the camera is released and OrbitControls owns it freely.
+ */
+function CameraController({ demoMode, morphProgress }: { demoMode: DemoMode; morphProgress: number }) {
   const { camera } = useThree();
   const targetRef = useRef<Vector3>(new Vector3(...MODE_CAMERA[demoMode]));
+  const morphProgressRef = useRef(morphProgress);
 
   useEffect(() => {
     targetRef.current.set(...MODE_CAMERA[demoMode]);
   }, [demoMode]);
 
+  // Keep an always-current ref so useFrame can read it without re-subscribing
+  morphProgressRef.current = morphProgress;
+
   useFrame(() => {
+    // Once the transition is complete, stop fighting OrbitControls
+    if (morphProgressRef.current >= 1) return;
     camera.position.lerp(targetRef.current, CAMERA_LERP_SPEED);
     camera.lookAt(0, 0, 0);
   });
@@ -50,8 +65,31 @@ function CameraController({ demoMode }: { demoMode: DemoMode }) {
 function SceneContent({
   params, currentTime, showClassicalSplit, showProjectionPlanes,
   showBasis, showTrailHistory, showFiber, showLocalFrame,
+  showProjectionShadow, morphProgress, prevMode,
 }: MainSceneProps) {
   const tip = computeSignalTip(params, currentTime);
+  const currentMode = params.demoMode;
+
+  // Opacity for the incoming (current) mode: fade in from 0 → 1
+  const inOpacity = morphProgress;
+  // Opacity for the outgoing (previous) mode: fade out from 1 → 0
+  const outOpacity = 1 - morphProgress;
+
+  // Is a transition actively in progress?
+  const isTransitioning = morphProgress < 1 && prevMode !== currentMode;
+
+  // Params snapshot for the outgoing mode — keep demoMode = prevMode so that
+  // internal geometry (trails, tips) is computed with the old mode's math.
+  const prevParams = { ...params, demoMode: prevMode };
+
+  // For Classical → Polarization morph: pass helixMorphProgress so the
+  // departing circle lifts off into a helix shape as it fades out.
+  const helixMorphForPrev =
+    isTransitioning && prevMode === 'complex' && currentMode === 'polarized'
+      ? morphProgress
+      : 0;
+
+  const prevTip = computeSignalTip(prevParams, currentTime);
 
   return (
     <>
@@ -81,24 +119,62 @@ function SceneContent({
         <ProjectionPlanes params={params} currentTime={currentTime} />
       )}
 
-      {params.demoMode === 'complex' && (
+      {/* ── Outgoing mode — fades out during transition ─────────────────── */}
+      {isTransitioning && prevMode === 'complex' && (
+        <ComplexSignalDemo
+          params={prevParams}
+          currentTime={currentTime}
+          tip={prevTip}
+          showBasis={false}
+          helixMorphProgress={helixMorphForPrev}
+          opacity={outOpacity}
+        />
+      )}
+      {isTransitioning && prevMode === 'polarized' && (
+        <PolarizedSignalDemo
+          params={prevParams}
+          currentTime={currentTime}
+          tip={prevTip}
+          showBasis={false}
+          showTrailHistory={showTrailHistory}
+          opacity={outOpacity}
+        />
+      )}
+      {isTransitioning && prevMode === 'quaternionic' && (
+        <QuaternionicSignalDemo
+          params={prevParams}
+          currentTime={currentTime}
+          tip={prevTip}
+          showClassicalSplit={false}
+          showTrailHistory={showTrailHistory}
+          showFiber={showFiber}
+          showLocalFrame={showLocalFrame}
+          showProjectionShadow={false}
+          opacity={outOpacity}
+        />
+      )}
+
+      {/* ── Current mode — fades in during transition ───────────────────── */}
+      {currentMode === 'complex' && (
         <ComplexSignalDemo
           params={params}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
+          opacity={isTransitioning ? inOpacity : 1}
         />
       )}
-      {params.demoMode === 'polarized' && (
+      {currentMode === 'polarized' && (
         <PolarizedSignalDemo
           params={params}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
           showTrailHistory={showTrailHistory}
+          opacity={isTransitioning ? inOpacity : 1}
         />
       )}
-      {params.demoMode === 'quaternionic' && (
+      {currentMode === 'quaternionic' && (
         <QuaternionicSignalDemo
           params={params}
           currentTime={currentTime}
@@ -107,10 +183,12 @@ function SceneContent({
           showTrailHistory={showTrailHistory}
           showFiber={showFiber}
           showLocalFrame={showLocalFrame}
+          showProjectionShadow={showProjectionShadow}
+          opacity={isTransitioning ? inOpacity : 1}
         />
       )}
 
-      <CameraController demoMode={params.demoMode} />
+      <CameraController demoMode={params.demoMode} morphProgress={morphProgress} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.05} />
     </>
   );

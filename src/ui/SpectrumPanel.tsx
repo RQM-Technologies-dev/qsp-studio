@@ -1,4 +1,4 @@
-import { SignalParams } from '../math/signal';
+import { SignalParams, DemoMode } from '../math/signal';
 import { quatFromAxisAngle, Vec3 } from '../math/quaternion';
 
 interface SpectrumBar {
@@ -18,13 +18,13 @@ function computeBars(params: SignalParams, currentTime: number): SpectrumBar[] {
 
   if (demoMode === 'complex') {
     // The complex sinusoid A·e^{iθ} — only one frequency bin is non-zero.
-    // Show magnitude (static) + live Re/Im projections.
+    // Show magnitude (static) + live I/Q (Re/Im) projections.
     const reNorm = Math.abs(Math.cos(theta));
     const imNorm = Math.abs(Math.sin(theta));
     return [
-      { label: 'Magnitude', value: amplitude, color: '#00d4ff',  description: 'Signal amplitude A' },
-      { label: '|Re|',      value: reNorm,    color: '#ff5566',  description: 'Real part |cos θ|' },
-      { label: '|Im|',      value: imNorm,    color: '#44ee88',  description: 'Imaginary part |sin θ|' },
+      { label: 'Magnitude', value: amplitude, color: '#00d4ff',  description: 'Signal amplitude A — EM carrier envelope' },
+      { label: 'I (Re)',     value: reNorm,    color: '#ff5566',  description: 'In-phase component |cos θ| — I channel' },
+      { label: 'Q (Im)',     value: imNorm,    color: '#44ee88',  description: 'Quadrature component |sin θ| — Q channel' },
     ];
   }
 
@@ -36,9 +36,9 @@ function computeBars(params: SignalParams, currentTime: number): SpectrumBar[] {
       amplitude * ellipticity;
     const bNorm = amplitude > 0 ? minorB / amplitude : 0;
     return [
-      { label: 'Major a',     value: amplitude,   color: '#e879f9', description: 'Semi-major axis length' },
-      { label: 'Minor b',     value: bNorm,       color: '#a78bfa', description: 'Semi-minor axis fraction b/a' },
-      { label: 'Ellipticity', value: ellipticity, color: '#c4b5fd', description: 'Ratio b/a (0 = linear, 1 = circular)' },
+      { label: 'Major a',     value: amplitude,   color: '#e879f9', description: 'Semi-major axis — primary EM field amplitude' },
+      { label: 'Minor b',     value: bNorm,       color: '#a78bfa', description: 'Semi-minor axis fraction b/a — cross-pol component' },
+      { label: 'Ellipticity', value: ellipticity, color: '#c4b5fd', description: 'Ellipticity ratio (0 = linear, 1 = circular polarization)' },
     ];
   }
 
@@ -52,17 +52,34 @@ function computeBars(params: SignalParams, currentTime: number): SpectrumBar[] {
   const q = quatFromAxisAngle(normAxis, theta * 0.3);
   // Note: |w|²+|x|²+|y|²+|z|² = 1 always for a unit quaternion.
   return [
-    { label: 'w (scalar)', value: Math.abs(q[0]), color: '#f59e0b', description: 'Scalar / real component of q = cos(θ·0.15)' },
-    { label: 'i (axis-x)', value: Math.abs(q[1]), color: '#ff6688', description: 'x-component of vector part: nx · sin(θ·0.15)' },
-    { label: 'j (axis-y)', value: Math.abs(q[2]), color: '#55ee88', description: 'y-component of vector part: ny · sin(θ·0.15)' },
-    { label: 'k (axis-z)', value: Math.abs(q[3]), color: '#5588ff', description: 'z-component of vector part: nz · sin(θ·0.15)' },
+    { label: 'w (scalar)', value: Math.abs(q[0]), color: '#f59e0b', description: 'Scalar part — encodes rotation angle cos(θ·0.15)' },
+    { label: 'i (axis-x)', value: Math.abs(q[1]), color: '#ff6688', description: 'x-vector part: nx · sin(θ·0.15) — EM field x-axis' },
+    { label: 'j (axis-y)', value: Math.abs(q[2]), color: '#55ee88', description: 'y-vector part: ny · sin(θ·0.15) — EM field y-axis' },
+    { label: 'k (axis-z)', value: Math.abs(q[3]), color: '#5588ff', description: 'z-vector part: nz · sin(θ·0.15) — propagation axis' },
   ];
 }
 
 const MODE_LABEL: Record<string, string> = {
-  complex:      'Planar Frequency',
+  complex:      'I/Q Decomposition',
   polarized:    'Polarization State',
   quaternionic: 'Quaternionic Coefficients',
+};
+
+/**
+ * The three conceptual stages of the signal transform pipeline.
+ * Active stage is highlighted per mode.
+ */
+const PIPELINE_STAGES: { key: string; label: string; activeFor: DemoMode[] }[] = [
+  { key: 'signal', label: 'Signal',      activeFor: ['complex'] },
+  { key: 'basis',  label: 'Basis',       activeFor: ['polarized'] },
+  { key: 'coeffs', label: 'Coefficients', activeFor: ['quaternionic'] },
+];
+
+/** Compact hover captions per mode — tie the scene to signal-processing concepts. */
+const MODE_CAPTION: Record<DemoMode, string> = {
+  complex:      'Projection onto planar I/Q rotating modes',
+  polarized:    'Projection onto spatial oscillation modes',
+  quaternionic: 'Projection onto unified geometric (QAM) modes',
 };
 
 interface SpectrumPanelProps {
@@ -72,12 +89,31 @@ interface SpectrumPanelProps {
 
 export function SpectrumPanel({ params, currentTime }: SpectrumPanelProps) {
   const bars = computeBars(params, currentTime);
+  const mode = params.demoMode;
 
   return (
     <div className="spectrum-panel">
+      {/* ── Transform pipeline header ─────────────────────────────────────── */}
+      <div className="pipeline-header" title={MODE_CAPTION[mode]}>
+        {PIPELINE_STAGES.map((stage, idx) => {
+          const isActive = stage.activeFor.includes(mode);
+          return (
+            <span key={stage.key} className="pipeline-stage-group">
+              <span className={`pipeline-stage ${isActive ? 'active' : ''}`}>
+                {stage.label}
+              </span>
+              {idx < PIPELINE_STAGES.length - 1 && (
+                <span className="pipeline-arrow">→</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* ── Spectrum label row ────────────────────────────────────────────── */}
       <div className="spectrum-header">
         <span className="spectrum-title">SPECTRUM</span>
-        <span className="spectrum-mode-label">{MODE_LABEL[params.demoMode]}</span>
+        <span className="spectrum-mode-label">{MODE_LABEL[mode]}</span>
       </div>
 
       <div className="spectrum-bars">
@@ -95,14 +131,14 @@ export function SpectrumPanel({ params, currentTime }: SpectrumPanelProps) {
         ))}
       </div>
 
-      {params.demoMode === 'quaternionic' && (
+      {mode === 'quaternionic' && (
         <p className="spectrum-note">|w|² + |i|² + |j|² + |k|² = 1</p>
       )}
-      {params.demoMode === 'complex' && (
-        <p className="spectrum-note">One frequency, one complex coefficient</p>
+      {mode === 'complex' && (
+        <p className="spectrum-note">I + jQ — single frequency complex coefficient</p>
       )}
-      {params.demoMode === 'polarized' && (
-        <p className="spectrum-note">Geometric coefficients of the ellipse</p>
+      {mode === 'polarized' && (
+        <p className="spectrum-note">Geometric coefficients of the EM polarization ellipse</p>
       )}
     </div>
   );

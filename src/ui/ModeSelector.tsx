@@ -7,9 +7,24 @@ interface ModeSelectorProps {
 }
 
 const modes: { key: DemoMode; label: string; sublabel: string; color: string }[] = [
-  { key: 'complex',       label: 'Classical Complex View',   sublabel: '2D phase reference',         color: '#00d4ff' },
-  { key: 'polarized',     label: 'Polarization Geometry',    sublabel: 'tip trajectory in 2D',       color: '#8b5cf6' },
-  { key: 'quaternionic',  label: 'Quaternionic Unified View', sublabel: 'one evolving geometric state', color: '#f59e0b' },
+  {
+    key: 'complex',
+    label: 'Classical I/Q',
+    sublabel: 'I/Q phasor — planar EM signal rotation in the complex plane',
+    color: '#00d4ff',
+  },
+  {
+    key: 'polarized',
+    label: 'Polarization',
+    sublabel: 'EM wave polarization ellipse — spatial oscillation mode in 3D',
+    color: '#8b5cf6',
+  },
+  {
+    key: 'quaternionic',
+    label: 'Quaternionic / QAM',
+    sublabel: 'Quaternionic unified state — geometric QAM across the full EM spectrum',
+    color: '#f59e0b',
+  },
 ];
 
 export function ModeSelector({ mode, onChange }: ModeSelectorProps) {

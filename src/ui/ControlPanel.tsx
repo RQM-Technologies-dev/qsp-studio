@@ -11,6 +11,7 @@ interface ControlPanelProps {
   showFiber: boolean;
   showLocalFrame: boolean;
   showSpectrumPanel: boolean;
+  showProjectionShadow: boolean;
   sweepMode: SweepMode;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
@@ -21,6 +22,7 @@ interface ControlPanelProps {
   onShowFiberChange: (v: boolean) => void;
   onShowLocalFrameChange: (v: boolean) => void;
   onShowSpectrumPanelChange: (v: boolean) => void;
+  onShowProjectionShadowChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -90,6 +92,7 @@ export function ControlPanel({
   showFiber,
   showLocalFrame,
   showSpectrumPanel,
+  showProjectionShadow,
   sweepMode,
   onParamsChange,
   onAnimSpeedChange,
@@ -100,6 +103,7 @@ export function ControlPanel({
   onShowFiberChange,
   onShowLocalFrameChange,
   onShowSpectrumPanelChange,
+  onShowProjectionShadowChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
@@ -192,6 +196,12 @@ export function ControlPanel({
               active={showLocalFrame}
               onToggle={() => onShowLocalFrameChange(!showLocalFrame)}
               title="Show the local quaternion orientation frame (i, j, k axes) at the signal tip"
+            />
+            <LayerToggle
+              label="Projection Shadow"
+              active={showProjectionShadow}
+              onToggle={() => onShowProjectionShadowChange(!showProjectionShadow)}
+              title="Show the XY-plane projection of the quaternionic orbit — the classical shadow that reveals how the full state projects down to a familiar planar signal"
             />
           </>
         )}
