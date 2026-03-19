@@ -4,6 +4,8 @@ import {
   computeReceiverBasis,
   projectFieldOntoReceiver,
   computeWavePhaseAtReceiver,
+  E_FIELD_SCALE,
+  B_FIELD_SCALE,
 } from '../math/receiverBasis';
 import { Vec3 } from '../math/quaternion';
 
@@ -48,8 +50,8 @@ export function SampledFieldGlyph({
 
   // ── Incoming field at receiver position ────────────────────────────────
   const phase = computeWavePhaseAtReceiver(params.frequency, currentTime, params.phase);
-  const eAmp = params.amplitude * 0.5;   // matches IncomingWave eAmp
-  const bAmp = params.amplitude * 0.32;  // matches IncomingWave bAmp
+  const eAmp = params.amplitude * E_FIELD_SCALE;
+  const bAmp = params.amplitude * B_FIELD_SCALE;
 
   const eField: Vec3 = [0, eAmp * Math.sin(phase), 0];           // E oscillates in Y
   const bField: Vec3 = [0, 0, bAmp * Math.sin(phase)];           // B oscillates in Z

@@ -7,15 +7,20 @@ import { InfoOverlay } from '../ui/InfoOverlay';
 import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
+import { ReceptionMeter } from '../ui/ReceptionMeter';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 import { SignalBuffer, sampleSignal, BUFFER_SIZE, SAMPLE_INTERVAL_MS } from '../math/signalBuffer';
 import { computeSpectrum, SpectrumData } from '../math/dft';
+import { computeCouplingStrength } from '../math/receiverBasis';
 
 /** How long (in wall-clock seconds) a mode morph transition lasts. */
 const MORPH_DURATION = 1.5;
 
 /** How often (wall-clock ms) the DFT is re-computed. 10 Hz = 100 ms. */
 const DFT_INTERVAL_MS = 100;
+
+/** Exponential lerp speed for coupling strength smoothing (units/second). */
+const COUPLING_LERP_SPEED = 6;
 
 export default function App() {
   const [params, setParams] = useState<SignalParams>(defaultSignalParams);
@@ -40,6 +45,16 @@ export default function App() {
 
   /** Shared ref written to 1 in the sampling setInterval; read in ReceiverNode useFrame. */
   const sampleFlashRef = useRef(0);
+
+  // ── Field coupling — smoothed scalar [0,1] that drives geometry amplitude ──
+  // Raw coupling is computed from orientation + mode; then lerped in the RAF loop
+  // to avoid jitter from rapid slider interaction.
+  const [couplingStrength, setCouplingStrength] = useState(1.0);
+  const couplingTargetRef  = useRef(1.0);   // updated on orientation/mode change
+  const couplingSmoothedRef = useRef(1.0);  // lerped in RAF
+  // Accessible inside setInterval closure without stale captures:
+  const couplingSmoothedForSamplingRef = useRef(1.0);
+  const showIncomingWaveRef = useRef(false);
 
   const [morphProgress, setMorphProgress] = useState(1);
   const [prevMode, setPrevMode] = useState<DemoMode>(defaultSignalParams.demoMode);
@@ -73,6 +88,18 @@ export default function App() {
   useEffect(() => {
     paramsRef.current = params;
   }, [params]);
+
+  // Keep showIncomingWaveRef in sync for use inside setInterval
+  useEffect(() => {
+    showIncomingWaveRef.current = showIncomingWave;
+  }, [showIncomingWave]);
+
+  // Recompute the raw coupling target whenever orientation, mode, or wave toggle changes
+  useEffect(() => {
+    couplingTargetRef.current = showIncomingWave
+      ? computeCouplingStrength(receiverYaw, receiverPitch, params.demoMode)
+      : 1.0;
+  }, [receiverYaw, receiverPitch, params.demoMode, showIncomingWave]);
 
   const animate = useCallback((timestamp: number) => {
     if (lastTimeRef.current === null) lastTimeRef.current = timestamp;
@@ -113,6 +140,15 @@ export default function App() {
       }
     }
 
+    // ── Coupling strength smooth lerp ─────────────────────────────────────
+    const prevCoupling = couplingSmoothedRef.current;
+    const couplingDelta = (couplingTargetRef.current - prevCoupling) * Math.min(1, dt * COUPLING_LERP_SPEED);
+    if (Math.abs(couplingDelta) > 0.0005) {
+      couplingSmoothedRef.current = prevCoupling + couplingDelta;
+      couplingSmoothedForSamplingRef.current = couplingSmoothedRef.current;
+      setCouplingStrength(couplingSmoothedRef.current);
+    }
+
     rafRef.current = requestAnimationFrame(animate);
   }, []);
 
@@ -127,8 +163,18 @@ export default function App() {
   // of browser throttling (e.g. in headless test environments).
   useEffect(() => {
     const id = setInterval(() => {
+      // Scale the sampled amplitude by the current coupling so the spectrum
+      // also responds to receiver misalignment.
+      const coupling = showIncomingWaveRef.current
+        ? couplingSmoothedForSamplingRef.current
+        : 1.0;
       signalBufferRef.current.push(
-        sampleSignal(paramsRef.current, currentTimeRef.current),
+        sampleSignal(
+          coupling < 0.999
+            ? { ...paramsRef.current, amplitude: paramsRef.current.amplitude * coupling }
+            : paramsRef.current,
+          currentTimeRef.current,
+        ),
       );
       // Signal sample event — ReceiverNode reads this in its useFrame loop
       sampleFlashRef.current = 1;
@@ -208,12 +254,16 @@ export default function App() {
           receiverYaw={receiverYaw}
           receiverPitch={receiverPitch}
           sampleFlashRef={sampleFlashRef}
+          couplingStrength={couplingStrength}
           morphProgress={morphProgress}
           prevMode={prevMode}
         />
         <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
           <SpectrumPanel params={params} spectrumData={spectrumData} />
+        )}
+        {showIncomingWave && (
+          <ReceptionMeter strength={couplingStrength} demoMode={params.demoMode} />
         )}
         <StatusStrip params={params} currentTime={currentTime} animSpeed={animSpeed} sweepMode={sweepMode} />
       </div>

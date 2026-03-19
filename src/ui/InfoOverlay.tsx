@@ -27,9 +27,11 @@ const modeInfo: Record<DemoMode, {
       'Classical Fourier asks: which planar rotations are present? ' +
       'Each frequency bin is a single complex number — one magnitude, one phase.',
     receptionNote:
-      'Planar encoding of the received oscillation. ' +
-      'The receiver projects the arriving field onto two orthogonal axes — ' +
-      'in-phase (I) and quadrature (Q) — collapsing the spatial wave into a rotating phasor.',
+      'Planar phasor size reflects captured field amplitude. ' +
+      'When the receiver is misaligned, the I/Q projection drops — ' +
+      'the circle shrinks and the phasor shortens visibly. ' +
+      'At broadside (90° off-axis), coupling falls to zero and the phasor collapses. ' +
+      'This is the most fragile encoding — a single planar projection of a spatial wave.',
   },
   polarized: {
     title: 'Polarization Geometry — Spatial Oscillation',
@@ -48,9 +50,11 @@ const modeInfo: Record<DemoMode, {
       'A polarization-aware transform extracts orientation and ellipticity per frequency — ' +
       'richer than complex Fourier, but still one geometric object per bin.',
     receptionNote:
-      'Spatial encoding of field orientation. ' +
-      'The receiver resolves the E-field vector at each instant, ' +
-      'tracing out the polarization ellipse — shape and orientation both encoded.',
+      'Helix size and trail brightness reflect captured polarized field. ' +
+      'As the receiver tilts away from optimal alignment, the helix radius shrinks ' +
+      'and the trail dims — the encoded polarization ellipse contracts. ' +
+      'Spatial structure gives some robustness: coupling degrades more gradually than ' +
+      'the classical I/Q case, but a severe misalignment still collapses the helix.',
   },
   quaternionic: {
     title: 'Quaternionic Unified View — Unified Geometric State',
@@ -73,9 +77,14 @@ const modeInfo: Record<DemoMode, {
       'Each coefficient is a full quaternion, not a complex number. ' +
       'One transform extracts what classical methods need three separate analyses to see.',
     receptionNote:
-      'Unified encoding of phase, polarization, and orientation. ' +
-      'The receiver extracts all four components simultaneously — ' +
-      'the arriving wave becomes one coherent quaternionic state, not three separate measurements.',
+      'Unified state strength reflects captured multi-axis field coherence. ' +
+      'When coupling weakens, the orbit shrinks, the halo dims, and fiber rings fade — ' +
+      'but the quaternionic receiver uses all three axes simultaneously, so it maintains ' +
+      'partial coupling (≥ 57%) even at extreme single-axis misalignment. ' +
+      'This robustness is not accidental: richer geometric encoding captures more of the ' +
+      'incoming field under imperfect conditions. ' +
+      'Rotate the receiver to see the quaternionic structure degrade more gracefully than ' +
+      'the classical phasor.',
   },
 };
 
@@ -133,8 +142,12 @@ export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayP
           {showIncomingWave && (
             <div className="info-pipeline">
               <span className="info-pipeline-label">Reception Pipeline</span>
-              <p className="info-pipeline-flow">EM Wave → Receiver → Geometric Encoding</p>
+              <p className="info-pipeline-flow">EM Wave → Receiver → Field Coupling → Geometric Encoding</p>
               <p className="info-pipeline-note">{receptionNote}</p>
+              <p className="info-pipeline-coupling">
+                The displayed geometry is the <em>encoded result after reception</em> — not the raw wave.
+                Rotate the receiver to see coupling strength drive the geometry amplitude directly.
+              </p>
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { Vec3, Quat, quatFromAxisAngle, quatMultiply, rotateVec3ByQuat } from './quaternion';
+import { DemoMode } from './signal';
 
 export interface ReceiverBasis {
   /** Forward axis — points into the incoming wave (+X at rest). */
@@ -79,8 +80,13 @@ export function projectFieldOntoReceiver(
  */
 export const RECEIVER_X = -2.8;
 
-/** Spatial wavenumber for the traveling wave — matches IncomingWave.tsx. */
+/** Spatial wavenumber for the traveling wave. Single source for IncomingWave + receiverBasis. */
 export const WAVE_K = 1.6;
+
+/** E-field peak amplitude as a fraction of signal amplitude. Shared with IncomingWave + SampledFieldGlyph. */
+export const E_FIELD_SCALE = 0.5;
+/** B-field peak amplitude as a fraction of signal amplitude. Shared with IncomingWave + SampledFieldGlyph. */
+export const B_FIELD_SCALE = 0.32;
 
 /**
  * Compute the traveling-wave phase at the receiver face.
@@ -94,3 +100,68 @@ export function computeWavePhaseAtReceiver(
 ): number {
   return WAVE_K * RECEIVER_X - 2 * Math.PI * frequency * currentTime + phase;
 }
+
+/**
+ * Compute a physically meaningful coupling strength scalar ∈ [0, 1] that
+ * describes how much of the incoming EM field the receiver captures given its
+ * orientation.
+ *
+ * Physical interpretation
+ * ───────────────────────
+ * The incoming wave propagates in +X with:
+ *   E-field oscillating in Y  →  E_hat = [0, 1, 0]
+ *   B-field oscillating in Z  →  B_hat = [0, 0, 1]
+ *
+ * Coupling depends on:
+ *   aperture  = |iAxis · X̂|  — how much the receiver faces the incoming wave
+ *   I_c       = jAxis[1]     — I-channel alignment with E-field (Y)
+ *   Q_c       = kAxis[2]     — Q-channel alignment with B-field (Z)
+ *
+ * Mode-differentiated formulas
+ * ────────────────────────────
+ * Classical  : aperture × √((I_c² + Q_c²) / 2)
+ *              Strictest coupling; complete nulls at 90° yaw or pitch.
+ *              Teaching: "Poor alignment yields weaker planar encoding."
+ *
+ * Polarized  : ∛aperture × √((I_c² + Q_c²) / 2)
+ *              More gradual degradation — spatial polarization structure gives
+ *              partial robustness to aperture tilt.
+ *              Teaching: "Spatial capture degrades more gracefully but still weakens."
+ *
+ * Quaternionic: √((aperture² + I_c² + Q_c²) / 3)
+ *               All three receiver axes contribute; maintains ≥ 1/√3 ≈ 0.577
+ *               coupling at any single-axis 90° rotation.
+ *               Teaching: "Richer geometric capture is inherently more robust."
+ *
+ * Reference values at rest (yaw=0, pitch=0): all modes → 1.0
+ * Reference at yaw=90°: classical=0, polarized=0, quaternionic≈0.577
+ * Reference at pitch=90°: classical=0, polarized=0, quaternionic≈0.577
+ */
+export function computeCouplingStrength(
+  yaw: number,
+  pitch: number,
+  demoMode: DemoMode,
+): number {
+  const basis = computeReceiverBasis(yaw, pitch);
+  const { iAxis, jAxis, kAxis } = basis;
+
+  // Aperture factor: how much the receiver faces the incoming wave (+X)
+  const aperture = Math.abs(iAxis[0]);
+  // I-channel: alignment of j_r with E-field direction (Y)
+  const I_c = jAxis[1];
+  // Q-channel: alignment of k_r with B-field direction (Z)
+  const Q_c = kAxis[2];
+  const IQ = (I_c * I_c + Q_c * Q_c) / 2;
+
+  if (demoMode === 'complex') {
+    // Strictest: aperture gate × I/Q field coupling
+    return Math.min(1, aperture * Math.sqrt(IQ));
+  }
+  if (demoMode === 'polarized') {
+    // Softer aperture roll-off: spatial polarization gives partial robustness
+    return Math.min(1, Math.cbrt(aperture) * Math.sqrt(IQ));
+  }
+  // Quaternionic: full 3-axis formula — most robust
+  return Math.min(1, Math.sqrt((aperture * aperture + I_c * I_c + Q_c * Q_c) / 3));
+}
+

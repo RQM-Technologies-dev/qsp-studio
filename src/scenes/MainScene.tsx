@@ -28,6 +28,8 @@ interface MainSceneProps {
   receiverYaw: number;
   receiverPitch: number;
   sampleFlashRef: MutableRefObject<number>;
+  /** Normalized coupling strength [0,1]; scales geometry amplitude when wave layer active. */
+  couplingStrength: number;
   /** 0 = transition just started, 1 = fully transitioned. */
   morphProgress: number;
   /** The mode we are transitioning away from. */
@@ -78,9 +80,15 @@ function SceneContent({
   params, currentTime, showClassicalSplit, showProjectionPlanes,
   showBasis, showTrailHistory, showFiber, showLocalFrame,
   showProjectionShadow, showIncomingWave, receiverYaw, receiverPitch,
-  sampleFlashRef, morphProgress, prevMode,
+  sampleFlashRef, couplingStrength, morphProgress, prevMode,
 }: MainSceneProps) {
-  const tip = computeSignalTip(params, currentTime);
+  // When the incoming wave layer is active, scale the signal amplitude by the
+  // coupling metric so the main geometry visibly weakens with misalignment.
+  const effectiveParams: SignalParams = showIncomingWave && couplingStrength < 0.999
+    ? { ...params, amplitude: params.amplitude * couplingStrength }
+    : params;
+
+  const tip = computeSignalTip(effectiveParams, currentTime);
   const currentMode = params.demoMode;
 
   // Opacity for the incoming (current) mode: fade in from 0 → 1
@@ -170,26 +178,28 @@ function SceneContent({
       {/* ── Current mode — fades in during transition ───────────────────── */}
       {currentMode === 'complex' && (
         <ComplexSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
       )}
       {currentMode === 'polarized' && (
         <PolarizedSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
           showTrailHistory={showTrailHistory}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
       )}
       {currentMode === 'quaternionic' && (
         <QuaternionicSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showClassicalSplit={showClassicalSplit}
@@ -197,6 +207,7 @@ function SceneContent({
           showFiber={showFiber}
           showLocalFrame={showLocalFrame}
           showProjectionShadow={showProjectionShadow}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
       )}

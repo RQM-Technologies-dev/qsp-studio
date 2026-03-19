@@ -743,3 +743,73 @@ body {
   font-style: italic;
   opacity: 0.85;
 }
+
+.info-pipeline-coupling {
+  margin-top: 0.4rem;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+/* ── Reception strength meter ──────────────────────────────────────────────── */
+.reception-meter {
+  position: absolute;
+  bottom: 3.8rem;
+  right: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.28rem;
+  pointer-events: none;
+  user-select: none;
+}
+
+.reception-meter-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+
+.reception-meter-bar-track {
+  width: 88px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.reception-meter-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.08s linear, background-color 0.15s ease;
+}
+
+.reception-meter-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.reception-meter-value {
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: color 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.reception-meter-qual {
+  font-size: 0.62rem;
+  font-weight: 500;
+  opacity: 0.8;
+  transition: color 0.15s ease;
+}
+
+.reception-meter-mode {
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  opacity: 0.6;
+}

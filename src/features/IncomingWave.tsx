@@ -1,5 +1,6 @@
 import { Line, Text } from '@react-three/drei';
 import { SignalParams } from '../math/signal';
+import { WAVE_K, E_FIELD_SCALE, B_FIELD_SCALE } from '../math/receiverBasis';
 
 interface IncomingWaveProps {
   params: SignalParams;
@@ -9,8 +10,6 @@ interface IncomingWaveProps {
 }
 
 const WAVE_START_X = -8.5;
-/** Spatial wavenumber — ~2 full cycles across the visible wave run. */
-const WAVE_K = 1.6;
 /** Number of sample points along the wave axis. */
 const NUM_POINTS = 90;
 
@@ -26,8 +25,8 @@ function buildWavePoints(
 } {
   const ePoints: [number, number, number][] = [];
   const bPoints: [number, number, number][] = [];
-  const eAmp = amplitude * 0.5;
-  const bAmp = amplitude * 0.32;
+  const eAmp = amplitude * E_FIELD_SCALE;
+  const bAmp = amplitude * B_FIELD_SCALE;
 
   for (let i = 0; i <= NUM_POINTS; i++) {
     const t = i / NUM_POINTS;
@@ -59,8 +58,8 @@ export function IncomingWave({ params, currentTime, receiverX, opacity = 1 }: In
 
   // Label positions — just past the wave endpoints at receiver edge
   const labelX = receiverX - 0.45;
-  const eAmp = amplitude * 0.5;
-  const bAmp = amplitude * 0.32;
+  const eAmp = amplitude * E_FIELD_SCALE;
+  const bAmp = amplitude * B_FIELD_SCALE;
 
   return (
     <group>
