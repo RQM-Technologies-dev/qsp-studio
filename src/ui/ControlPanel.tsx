@@ -12,6 +12,9 @@ interface ControlPanelProps {
   showLocalFrame: boolean;
   showSpectrumPanel: boolean;
   showProjectionShadow: boolean;
+  showIncomingWave: boolean;
+  receiverYaw: number;
+  receiverPitch: number;
   sweepMode: SweepMode;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
@@ -23,6 +26,9 @@ interface ControlPanelProps {
   onShowLocalFrameChange: (v: boolean) => void;
   onShowSpectrumPanelChange: (v: boolean) => void;
   onShowProjectionShadowChange: (v: boolean) => void;
+  onShowIncomingWaveChange: (v: boolean) => void;
+  onReceiverYawChange: (v: number) => void;
+  onReceiverPitchChange: (v: number) => void;
 }
 
 interface SliderProps {
@@ -93,6 +99,9 @@ export function ControlPanel({
   showLocalFrame,
   showSpectrumPanel,
   showProjectionShadow,
+  showIncomingWave,
+  receiverYaw,
+  receiverPitch,
   sweepMode,
   onParamsChange,
   onAnimSpeedChange,
@@ -104,6 +113,9 @@ export function ControlPanel({
   onShowLocalFrameChange,
   onShowSpectrumPanelChange,
   onShowProjectionShadowChange,
+  onShowIncomingWaveChange,
+  onReceiverYawChange,
+  onReceiverPitchChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
@@ -211,7 +223,36 @@ export function ControlPanel({
           onToggle={() => onShowSpectrumPanelChange(!showSpectrumPanel)}
           title="Show the coefficient / spectrum panel"
         />
+        <LayerToggle
+          label="Incoming Wave"
+          active={showIncomingWave}
+          onToggle={() => onShowIncomingWaveChange(!showIncomingWave)}
+          title="Show the incoming electromagnetic wave arriving at the receiver, and how it is encoded into the current geometric representation"
+        />
       </div>
+
+      {/* ── Receiver Orientation — shown only when the incoming wave layer is active ── */}
+      {showIncomingWave && (
+        <div className="control-section">
+          <h4>Receiver Orientation</h4>
+          <Slider
+            label="Yaw (°)"
+            value={Math.round(receiverYaw * (180 / Math.PI))}
+            min={-90}
+            max={90}
+            step={1}
+            onChange={(v) => onReceiverYawChange(v * (Math.PI / 180))}
+          />
+          <Slider
+            label="Pitch (°)"
+            value={Math.round(receiverPitch * (180 / Math.PI))}
+            min={-90}
+            max={90}
+            step={1}
+            onChange={(v) => onReceiverPitchChange(v * (Math.PI / 180))}
+          />
+        </div>
+      )}
     </div>
   );
 }

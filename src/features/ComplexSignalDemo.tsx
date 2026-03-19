@@ -17,10 +17,20 @@ interface ComplexSignalDemoProps {
   helixMorphProgress?: number;
   /** Opacity multiplier (0–1) used during mode-morph fade. */
   opacity?: number;
+  /**
+   * Normalized field-coupling strength [0,1].
+   * Drives glow intensity: when coupling weakens, the phasor and circle dim
+   * to reinforce that poor alignment reduces the encoded signal amplitude.
+   */
+  couplingStrength?: number;
 }
 
-export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress = 0, opacity = 1 }: ComplexSignalDemoProps) {
+export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress = 0, opacity = 1, couplingStrength = 1 }: ComplexSignalDemoProps) {
   const { amplitude } = params;
+
+  // Reduce circle/phasor brightness when coupling weakens — minimum 0.55 so geometry
+  // is still recognisable even at worst misalignment.
+  const glowOpacity = opacity * (0.55 + 0.45 * couplingStrength);
 
   // Static unit circle in the XY plane — morphs toward a helix as helixMorphProgress grows.
   // Z offset is proportional to phase angle * helixMorphProgress, matching the helix that
@@ -46,29 +56,29 @@ export function ComplexSignalDemo({ params, tip, showBasis, helixMorphProgress =
   return (
     <>
       {/* Full unit circle outline — I/Q reference plane (the basis manifold) */}
-      <Line points={circlePoints} color="#00d4ff" lineWidth={1.8} transparent opacity={0.45 * opacity} />
+      <Line points={circlePoints} color="#00d4ff" lineWidth={1.8} transparent opacity={0.45 * glowOpacity} />
 
       {/* Basis decomposition: I (Re) / Q (Im) projection lines — toggled by showBasis */}
       {showBasis && (
         <>
-          <Line points={[tip, rePoint]} color="#ff5566" lineWidth={1} transparent opacity={0.35 * opacity} />
-          <Line points={[tip, imPoint]} color="#44ee88" lineWidth={1} transparent opacity={0.35 * opacity} />
+          <Line points={[tip, rePoint]} color="#ff5566" lineWidth={1} transparent opacity={0.35 * glowOpacity} />
+          <Line points={[tip, imPoint]} color="#44ee88" lineWidth={1} transparent opacity={0.35 * glowOpacity} />
 
           {/* I (Re) intercept dot */}
           <mesh position={rePoint}>
             <sphereGeometry args={[0.04, 10, 10]} />
-            <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2} transparent opacity={0.75 * opacity} />
+            <meshStandardMaterial color="#ff5566" emissive="#ff5566" emissiveIntensity={2 * couplingStrength} transparent opacity={0.75 * glowOpacity} />
           </mesh>
           {/* Q (Im) intercept dot */}
           <mesh position={imPoint}>
             <sphereGeometry args={[0.04, 10, 10]} />
-            <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2} transparent opacity={0.75 * opacity} />
+            <meshStandardMaterial color="#44ee88" emissive="#44ee88" emissiveIntensity={2 * couplingStrength} transparent opacity={0.75 * glowOpacity} />
           </mesh>
         </>
       )}
 
       {/* Phasor: the rotating arm from origin to the I/Q unit-circle point */}
-      <SignalVector tip={tip} demoMode="complex" opacity={opacity} />
+      <SignalVector tip={tip} demoMode="complex" opacity={glowOpacity} />
     </>
   );
 }

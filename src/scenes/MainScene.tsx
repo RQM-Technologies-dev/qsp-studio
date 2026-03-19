@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { MutableRefObject, useEffect, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, Grid } from '@react-three/drei';
 import { Vector3 } from 'three';
@@ -6,8 +6,13 @@ import { AxisFrame } from '../components/AxisFrame';
 import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
 import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
+import { IncomingWave } from '../features/IncomingWave';
+import { ReceiverNode } from '../features/ReceiverNode';
+import { ReceptionLink } from '../features/ReceptionLink';
+import { SampledFieldGlyph } from '../features/SampledFieldGlyph';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
 import { SignalParams, computeSignalTip, DemoMode } from '../math/signal';
+import { RECEIVER_X } from '../math/receiverBasis';
 
 interface MainSceneProps {
   params: SignalParams;
@@ -19,6 +24,12 @@ interface MainSceneProps {
   showFiber: boolean;
   showLocalFrame: boolean;
   showProjectionShadow: boolean;
+  showIncomingWave: boolean;
+  receiverYaw: number;
+  receiverPitch: number;
+  sampleFlashRef: MutableRefObject<number>;
+  /** Normalized coupling strength [0,1]; scales geometry amplitude when wave layer active. */
+  couplingStrength: number;
   /** 0 = transition just started, 1 = fully transitioned. */
   morphProgress: number;
   /** The mode we are transitioning away from. */
@@ -31,6 +42,9 @@ const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
   polarized:    [4.0, 2.2, 4.0],
   quaternionic: [3.2, 2.8, 4.5],
 };
+
+/** Position of the receiver node — left of the origin, perpendicular to the incoming wave. */
+const RECEIVER_POSITION: [number, number, number] = [RECEIVER_X, 0, 0];
 
 /** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
 const CAMERA_LERP_SPEED = 0.06;
@@ -65,9 +79,16 @@ function CameraController({ demoMode, morphProgress }: { demoMode: DemoMode; mor
 function SceneContent({
   params, currentTime, showClassicalSplit, showProjectionPlanes,
   showBasis, showTrailHistory, showFiber, showLocalFrame,
-  showProjectionShadow, morphProgress, prevMode,
+  showProjectionShadow, showIncomingWave, receiverYaw, receiverPitch,
+  sampleFlashRef, couplingStrength, morphProgress, prevMode,
 }: MainSceneProps) {
-  const tip = computeSignalTip(params, currentTime);
+  // When the incoming wave layer is active, scale the signal amplitude by the
+  // coupling metric so the main geometry visibly weakens with misalignment.
+  const effectiveParams: SignalParams = showIncomingWave && couplingStrength < 0.999
+    ? { ...params, amplitude: params.amplitude * couplingStrength }
+    : params;
+
+  const tip = computeSignalTip(effectiveParams, currentTime);
   const currentMode = params.demoMode;
 
   // Opacity for the incoming (current) mode: fade in from 0 → 1
@@ -157,26 +178,28 @@ function SceneContent({
       {/* ── Current mode — fades in during transition ───────────────────── */}
       {currentMode === 'complex' && (
         <ComplexSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
       )}
       {currentMode === 'polarized' && (
         <PolarizedSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
           showTrailHistory={showTrailHistory}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
       )}
       {currentMode === 'quaternionic' && (
         <QuaternionicSignalDemo
-          params={params}
+          params={effectiveParams}
           currentTime={currentTime}
           tip={tip}
           showClassicalSplit={showClassicalSplit}
@@ -184,8 +207,40 @@ function SceneContent({
           showFiber={showFiber}
           showLocalFrame={showLocalFrame}
           showProjectionShadow={showProjectionShadow}
+          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
         />
+      )}
+
+      {/* ── Incoming wave reception layer — toggled by showIncomingWave ───── */}
+      {showIncomingWave && (
+        <>
+          <IncomingWave
+            params={params}
+            currentTime={currentTime}
+            receiverX={RECEIVER_X}
+          />
+          <ReceiverNode
+            position={RECEIVER_POSITION}
+            yaw={receiverYaw}
+            pitch={receiverPitch}
+            sampleFlashRef={sampleFlashRef}
+          />
+          <ReceptionLink
+            receiverPos={RECEIVER_POSITION}
+            targetPos={[0, 0, 0]}
+            demoMode={currentMode}
+            currentTime={currentTime}
+          />
+          <SampledFieldGlyph
+            params={params}
+            currentTime={currentTime}
+            position={RECEIVER_POSITION}
+            demoMode={currentMode}
+            receiverYaw={receiverYaw}
+            receiverPitch={receiverPitch}
+          />
+        </>
       )}
 
       <CameraController demoMode={params.demoMode} morphProgress={morphProgress} />

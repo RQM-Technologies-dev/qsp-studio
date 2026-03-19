@@ -27,6 +27,12 @@ interface QuaternionicSignalDemoProps {
   showProjectionShadow: boolean;
   /** Opacity multiplier (0–1) used during mode-morph fade. */
   opacity?: number;
+  /**
+   * Normalized field-coupling strength [0,1].
+   * Scales halo opacity and fiber ring brightness as coupling weakens —
+   * the richer quaternionic structure visibly loses coherence under misalignment.
+   */
+  couplingStrength?: number;
 }
 
 /** Shared helper: compute the current quaternion from signal params + time. */
@@ -227,7 +233,7 @@ function FiberRings({ trail, currentTime, wComponent, opacity }: {
 export function QuaternionicSignalDemo({
   params, currentTime, tip, showClassicalSplit,
   showTrailHistory, showFiber, showLocalFrame,
-  showProjectionShadow, opacity = 1,
+  showProjectionShadow, opacity = 1, couplingStrength = 1,
 }: QuaternionicSignalDemoProps) {
   const trail = generateTrail(params, currentTime, 2.5 / params.frequency, 180);
 
@@ -235,27 +241,31 @@ export function QuaternionicSignalDemo({
   const { q } = computeCurrentQuat(params, currentTime);
   const wComponent = q[0];
 
+  // Halo and fiber dims as coupling weakens — minimum 0.45 so the quaternionic
+  // structure is still hinted at even at worst misalignment.
+  const structureOpacity = opacity * (0.45 + 0.55 * couplingStrength);
+
   return (
     <>
       {showClassicalSplit && <ClassicalSplitGhost params={params} currentTime={currentTime} />}
 
       {/* XY-plane shadow — shows how the quaternionic state projects to a classical orbit */}
-      {showProjectionShadow && <ProjectionShadow trail={trail} opacity={opacity} />}
+      {showProjectionShadow && <ProjectionShadow trail={trail} opacity={structureOpacity} />}
 
       {/* Rich enhanced trail — toggled by showTrailHistory */}
-      {showTrailHistory && <TrailPath points={trail} demoMode="quaternionic" enhanced opacity={opacity} />}
+      {showTrailHistory && <TrailPath points={trail} demoMode="quaternionic" enhanced opacity={structureOpacity} />}
 
       {/* Fiber rings — toggled by showFiber; rotation rate encodes |w| */}
-      {showFiber && <FiberRings trail={trail} currentTime={currentTime} wComponent={wComponent} opacity={opacity} />}
+      {showFiber && <FiberRings trail={trail} currentTime={currentTime} wComponent={wComponent} opacity={structureOpacity} />}
 
-      {/* Pulsing halo — always shown; pulse rate encodes |w| */}
-      <PulsingHalo tip={tip} wComponent={wComponent} opacity={opacity} />
+      {/* Pulsing halo — always shown; pulse rate encodes |w|; dims with coupling */}
+      <PulsingHalo tip={tip} wComponent={wComponent} opacity={structureOpacity} />
 
       {/* Signal vector */}
-      <SignalVector tip={tip} demoMode="quaternionic" enhanced opacity={opacity} />
+      <SignalVector tip={tip} demoMode="quaternionic" enhanced opacity={structureOpacity} />
 
       {/* Local quaternion orientation frame — toggled by showLocalFrame */}
-      {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={opacity} />}
+      {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={structureOpacity} />}
     </>
   );
 }
