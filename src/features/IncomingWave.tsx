@@ -83,7 +83,82 @@ function buildWavePoints(
   return { ePoints, bPoints };
 }
 
-// ─── Mode-specific arrival overlays ────────────────────────────────────────
+/**
+ * Generate helical wave points for the polarized mode.
+ *
+ * A circularly (or elliptically) polarized EM wave has its E and B field
+ * vectors rotating in the YZ plane as the wave travels along X.  This
+ * produces a corkscrew / helix that visually represents the polar signal.
+ *
+ * The E-field helix uses a 90° phase offset between its Y and Z components
+ * so the combined field vector sweeps a circle (or ellipse) in the YZ plane:
+ *   E_y = A · eFactor · sin(phase)
+ *   E_z = −A · cos(phase)          ← 90° ahead in phase, -sign matches receiver disc
+ *
+ * The B-field is the cross product of the propagation direction (+X̂) with E:
+ *   B_y = A · cos(phase)
+ *   B_z = A · eFactor · sin(phase)
+ *
+ * For linear polarization (eFactor = 0) both helices degenerate to flat
+ * sinusoidal ribbons matching the classical E/B view.
+ */
+function buildHelixPoints(
+  params: SignalParams,
+  theta: number,
+  contactX: number,
+): {
+  ePoints: [number, number, number][];
+  bPoints: [number, number, number][];
+  waveY: number;
+  waveZ: number;
+} {
+  const { amplitude, polarization, ellipticity } = params;
+  const eFactor = polarization === 'linear' ? 0 : polarization === 'circular' ? 1 : ellipticity;
+
+  const ePoints: [number, number, number][] = [];
+  const bPoints: [number, number, number][] = [];
+
+  for (let i = 0; i <= NUM_POINTS; i++) {
+    const t = i / NUM_POINTS;
+    const x = WAVE_START_X + t * (contactX - WAVE_START_X);
+    const phase = theta + WAVE_K * (contactX - x);
+    // E-field: helix in YZ with eFactor scaling the transverse Z component
+    ePoints.push([x, amplitude * eFactor * Math.sin(phase), -amplitude * Math.cos(phase)]);
+    // B-field: cross product X̂ × E (perpendicular to E in YZ plane)
+    bPoints.push([x, amplitude * Math.cos(phase), amplitude * eFactor * Math.sin(phase)]);
+  }
+
+  // Values at the contact point (x = contactX, phase = theta) for the tilt capture
+  const waveY = amplitude * eFactor * Math.sin(theta);
+  const waveZ = -amplitude * Math.cos(theta);
+
+  return { ePoints, bPoints, waveY, waveZ };
+}
+
+/** Build all wave points and face values for the current mode.
+ *
+ * Returns ePoints, bPoints, waveY, and waveZ in a single call.  For flat modes
+ * (complex, quaternionic) the flat ribbon geometry is used.  For polarized mode
+ * the helical geometry is used.  This avoids repeated conditional branches and
+ * non-null assertions in the render function.
+ */
+function buildAllWaveData(
+  params: SignalParams,
+  theta: number,
+  contactX: number,
+  isHelical: boolean,
+): {
+  ePoints: [number, number, number][];
+  bPoints: [number, number, number][];
+  waveY: number;
+  waveZ: number;
+} {
+  if (isHelical) {
+    return buildHelixPoints(params, theta, contactX);
+  }
+  const { ePoints, bPoints } = buildWavePoints(params.amplitude, theta, contactX);
+  return { ePoints, bPoints, waveY: params.amplitude * Math.sin(theta), waveZ: params.amplitude * Math.sin(theta) };
+}
 
 /**
  * Classical I/Q — planar rim capture.
@@ -294,19 +369,20 @@ function QuaternionicBoundaryCapture({
 /**
  * Traveling electromagnetic wave approaching the receiver from the left.
  *
- * Shows:
- * - E-field (cyan):  sinusoidal ribbon in the XY plane — amplitude = geometry amplitude
+ * For complex and quaternionic modes shows:
+ * - E-field (cyan):  sinusoidal ribbon in the XY plane
  * - B-field (rose):  sinusoidal ribbon in the XZ plane
- * - Propagation axis: faint backbone with directional dots
- * - Mode-specific boundary capture overlay at the live contact point
  *
- * The wave terminates at the live contact point (x = contactPoint[0]) rather
- * than a fixed face, so the wave body meets the geometry boundary exactly.
- * The phase at the terminus equals the shared phase θ, ensuring the wave and
- * geometry are two parameterizations of the same evolving state.
+ * For polarized mode shows a helical (circularly/elliptically polarized) wave:
+ * - E-helix (cyan):  E-field vector rotating in the YZ plane as it propagates
+ * - B-helix (rose):  B-field vector (cross product of propagation with E) also helical
+ *
+ * In all modes the wave terminates at the fixed receiver face so the wave body
+ * has a steady length.  The phase at the terminus equals the shared phase θ,
+ * ensuring the wave and geometry are always two parameterizations of the same
+ * evolving state.
  */
 export function IncomingWave({ params, currentTime, receiverX, demoMode, contactPoint, opacity = 1 }: IncomingWaveProps) {
-  const { amplitude } = params;
   const mode = demoMode ?? params.demoMode;
 
   // ── Shared phase θ = ωt + φ — single source of truth for both the wave
@@ -317,12 +393,9 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
   // the wave body has a steady length and travels smoothly without sawing).
   const waveEndX = receiverX;
 
-  const { ePoints, bPoints } = buildWavePoints(amplitude, theta, waveEndX);
-
-  // ── Field values at the contact point — phase = θ (shared, no spatial offset).
-  const waveY = amplitude * Math.sin(theta);
-  // B-field same amplitude as E-field for visual symmetry (requirement 7).
-  const waveZ = amplitude * Math.sin(theta);
+  // ── Choose flat or helical wave geometry depending on the active mode.
+  const isHelical = mode === 'polarized';
+  const { ePoints, bPoints, waveY, waveZ } = buildAllWaveData(params, theta, waveEndX, isHelical);
   const waveValueNorm = Math.sin(theta); // ∈ [–1, 1]
 
   // ── Quaternion scalar w = cos(θ) — scalar part of q(t) = cos(θ) + u·sin(θ).
@@ -331,12 +404,21 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
 
   const dotXs: number[] = [-8, -6.5, -5.2, -4.0];
   const labelX = waveEndX - 0.45;
-  const eAmp = amplitude;
-  const bAmp = amplitude;  // same as eAmp — E and B fields have equal amplitude
+  const { amplitude } = params;
+
+  // ── Label positions differ for helical vs flat wave.
+  // Flat:    E peaks at +Y, B peaks at +Z (classical ribbon view).
+  // Helical: E helix peaks at −Z, B helix peaks at +Y (polarized rotated disc view).
+  const eLabelPos: [number, number, number] = isHelical
+    ? [labelX, 0, -(amplitude + 0.14)]
+    : [labelX, amplitude + 0.14, 0];
+  const bLabelPos: [number, number, number] = isHelical
+    ? [labelX, amplitude + 0.14, 0]
+    : [labelX, 0, amplitude + 0.16];
 
   return (
     <group>
-      {/* E-field ribbon — XY plane, cyan */}
+      {/* E-field ribbon / helix — cyan */}
       {ePoints.length >= 2 && (
         <Line
           points={ePoints}
@@ -347,7 +429,7 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
         />
       )}
 
-      {/* B-field ribbon — XZ plane, rose/magenta */}
+      {/* B-field ribbon / helix — rose/magenta */}
       {bPoints.length >= 2 && (
         <Line
           points={bPoints}
@@ -417,7 +499,7 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
 
       {/* E-field label */}
       <Text
-        position={[labelX, eAmp + 0.14, 0]}
+        position={eLabelPos}
         fontSize={0.12}
         color="#00d4ff"
         fillOpacity={0.75 * opacity}
@@ -428,7 +510,7 @@ export function IncomingWave({ params, currentTime, receiverX, demoMode, contact
 
       {/* B-field label */}
       <Text
-        position={[labelX, 0, bAmp + 0.16]}
+        position={bLabelPos}
         fontSize={0.12}
         color="#ff44aa"
         fillOpacity={0.65 * opacity}

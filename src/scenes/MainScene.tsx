@@ -87,10 +87,13 @@ function SceneContent({
   const currentMode = params.demoMode;
 
   // ── World-space live contact point ────────────────────────────────────
-  // The demo group applies rotation={[receiverPitch, receiverYaw, 0]} so we
+  // The demo group applies rotation={[receiverPitch, receiverYaw(+offset), 0]} so we
   // rotate the local tip by the same receiver quaternion to get the exact
   // world-space position where the incoming wave should meet the geometry.
-  const receiverBasis = computeReceiverBasis(receiverYaw, receiverPitch);
+  // Polarized mode adds a fixed π/2 Y-axis offset so the receiver disc faces
+  // the incoming wave (disc normal = +X = wave propagation direction).
+  const polarizedYawOffset = currentMode === 'polarized' ? Math.PI / 2 : 0;
+  const receiverBasis = computeReceiverBasis(receiverYaw + polarizedYawOffset, receiverPitch);
   const worldTipRaw = rotateVec3ByQuat(tip, receiverBasis.q);
   const worldTip: [number, number, number] = [worldTipRaw[0], worldTipRaw[1], worldTipRaw[2]];
 
@@ -160,7 +163,6 @@ function SceneContent({
           currentTime={currentTime}
           tip={prevTip}
           showBasis={false}
-          showTrailHistory={showTrailHistory}
           opacity={outOpacity}
         />
       )}
@@ -198,7 +200,6 @@ function SceneContent({
           currentTime={currentTime}
           tip={tip}
           showBasis={showBasis}
-          showTrailHistory={showTrailHistory}
           couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
           receiverYaw={receiverYaw}
