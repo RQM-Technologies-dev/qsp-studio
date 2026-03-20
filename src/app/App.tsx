@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { flushSync } from 'react-dom';
 import { MainScene } from '../scenes/MainScene';
 import { ControlPanel } from '../ui/ControlPanel';
 import { ModeSelector } from '../ui/ModeSelector';
@@ -183,15 +182,16 @@ export default function App() {
   }, []);
 
   // ── DFT update — setInterval at ~10 Hz ───────────────────────────────────
-  // flushSync guarantees React commits this state update synchronously,
-  // bypassing the MessageChannel scheduler that can stall in headless/throttled
-  // environments. At 10 Hz the synchronous flush cost is negligible.
+  // Regular setState is safe here: React 18 auto-batches updates outside event
+  // handlers. Avoid flushSync which can interact with concurrent animation
+  // RAF loops (from HypersphereVisualization) and trigger "Maximum update
+  // depth exceeded" warnings in development mode.
   useEffect(() => {
     const id = setInterval(() => {
       const samples = signalBufferRef.current.getAll();
       const result = computeSpectrum(samples, paramsRef.current.frequency);
       if (result !== null) {
-        flushSync(() => setSpectrumData(result));
+        setSpectrumData(result);
       }
     }, DFT_INTERVAL_MS);
     return () => clearInterval(id);

@@ -8,7 +8,7 @@
  * Animation runs as a continuous loop with no static pauses.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 
 export interface QuantumState {
   phi: number;
@@ -26,6 +26,24 @@ interface SpinorConfig {
   radiusScale?: number;
 }
 
+// ── Module-level constants (stable — never recreated on re-render) ─────────
+
+/** Slower gate transition: 10 s per full rotation. */
+const TRANSITION_DURATION = 10000;
+
+/** Quantum gate spinors displayed on the hypersphere. */
+const SPINORS: SpinorConfig[] = [
+  { name: 'I',  u: { x: 0, y: 0, z: 1 },               omega: 0, color: '#a8d4f0', phi0: 0,                  radiusScale: 0.609 },
+  { name: 'X₀', u: { x: 1, y: 0, z: 0 },               omega: 0, color: '#a8f0b8', phi0: 2 * Math.PI / 5,   radiusScale: 0.696 },
+  { name: 'X₁', u: { x: 1, y: 0, z: 0 },               omega: 0, color: '#a8d4f0', phi0: 2 * Math.PI / 3,   radiusScale: 0.928 },
+  { name: 'Y₂', u: { x: 0, y: 1, z: 0 },               omega: 0, color: '#a8f0b8', phi0: Math.PI / 6,       radiusScale: 0.696 },
+  { name: 'Z₃', u: { x: 0, y: 0, z: 1 },               omega: 0, color: '#a8d4f0', phi0: Math.PI / 4,       radiusScale: 0.928 },
+  { name: 'H₄', u: { x: 0.707107, y: 0, z: 0.707107 }, omega: 0, color: '#a8f0b8', phi0: 3 * Math.PI / 4,   radiusScale: 0.928 },
+  { name: 'T₅', u: { x: 0, y: 0, z: 1 },               omega: 0, color: '#a8d4f0', phi0: Math.PI / 5,       radiusScale: 0.861 },
+  { name: 'Y₆', u: { x: 0, y: 1, z: 0 },               omega: 0, color: '#a8f0b8', phi0: Math.PI / 3,       radiusScale: 0.861 },
+  { name: 'Xπ', u: { x: 1, y: 0, z: 0 },               omega: 0, color: '#a8d4f0', phi0: 5 * Math.PI / 6,   radiusScale: 0.928 },
+];
+
 interface HypersphereVisualizationProps {
   width?: number;
   height?: number;
@@ -34,7 +52,7 @@ interface HypersphereVisualizationProps {
   onStateChange?: (state: QuantumState) => void;
 }
 
-export default function HypersphereVisualization({
+export default memo(function HypersphereVisualization({
   width = 900,
   height = 700,
   className = '',
@@ -55,9 +73,6 @@ export default function HypersphereVisualization({
   const H = height;
   const FOV = 600;
 
-  // Slower transition: 10 s per gate rotation
-  const TRANSITION_DURATION = 10000;
-
   const viewQuatRef = useRef<[number, number, number, number]>([0.404, 0.058, 0.905, 0.128]);
   const lastMouseRef = useRef<{ x: number; y: number } | null>(null);
   const starsRef = useRef<
@@ -68,28 +83,10 @@ export default function HypersphereVisualization({
   const currentStateIndexRef = useRef(currentStateIndex);
   const isAnimatingRef = useRef(isAnimating);
   const transitionProgressRef = useRef(transitionProgress);
-  const spinorsRef = useRef<SpinorConfig[]>([]);
+  // spinorsRef is pre-seeded with the module-level constant — no effect needed.
+  const spinorsRef = useRef<SpinorConfig[]>(SPINORS);
   const visualScaleRef = useRef(1.0);
   const isPlayingRef = useRef(isPlaying);
-
-  // Quantum gate spinors (excludes Quaternion and EigenSpinor mode categories)
-  const defaultSpinors: SpinorConfig[] = [
-    { name: 'I',  u: { x: 0, y: 0, z: 1 },            omega: 0, color: '#a8d4f0', phi0: 0,                  radiusScale: 0.609 },
-    { name: 'X₀', u: { x: 1, y: 0, z: 0 },            omega: 0, color: '#a8f0b8', phi0: 2 * Math.PI / 5,   radiusScale: 0.696 },
-    { name: 'X₁', u: { x: 1, y: 0, z: 0 },            omega: 0, color: '#a8d4f0', phi0: 2 * Math.PI / 3,   radiusScale: 0.928 },
-    { name: 'Y₂', u: { x: 0, y: 1, z: 0 },            omega: 0, color: '#a8f0b8', phi0: Math.PI / 6,       radiusScale: 0.696 },
-    { name: 'Z₃', u: { x: 0, y: 0, z: 1 },            omega: 0, color: '#a8d4f0', phi0: Math.PI / 4,       radiusScale: 0.928 },
-    { name: 'H₄', u: { x: 0.707107, y: 0, z: 0.707107 }, omega: 0, color: '#a8f0b8', phi0: 3 * Math.PI / 4, radiusScale: 0.928 },
-    { name: 'T₅', u: { x: 0, y: 0, z: 1 },            omega: 0, color: '#a8d4f0', phi0: Math.PI / 5,       radiusScale: 0.861 },
-    { name: 'Y₆', u: { x: 0, y: 1, z: 0 },            omega: 0, color: '#a8f0b8', phi0: Math.PI / 3,       radiusScale: 0.861 },
-    { name: 'Xπ', u: { x: 1, y: 0, z: 0 },            omega: 0, color: '#a8d4f0', phi0: 5 * Math.PI / 6,   radiusScale: 0.928 },
-  ];
-
-  const spinors = defaultSpinors;
-
-  useEffect(() => {
-    spinorsRef.current = spinors;
-  }, [spinors]);
 
   useEffect(() => {
     currentStateIndexRef.current = currentStateIndex;
@@ -177,7 +174,7 @@ export default function HypersphereVisualization({
 
     animationId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationId);
-  }, [isPlaying, TRANSITION_DURATION]);
+  }, [isPlaying]);
 
   // ── Path tracing ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -404,8 +401,8 @@ export default function HypersphereVisualization({
   };
 
   const getCurrentQuaternion = (): number[] => {
-    const currentState = spinors[currentStateIndex];
-    const nextState = spinors[(currentStateIndex + 1) % spinors.length];
+    const currentState = SPINORS[currentStateIndex];
+    const nextState = SPINORS[(currentStateIndex + 1) % SPINORS.length];
     const currentQuat = makeQuatFromState(currentState);
     const nextQuat = makeQuatFromState(nextState);
     const easedProgress = easeInOutCubic(transitionProgress);
@@ -435,12 +432,12 @@ export default function HypersphereVisualization({
   );
 
   // ── Derive the current interpolated (phi, u) for external consumers ──────
-  const currentState = spinors[currentStateIndex];
+  const currentState = SPINORS[currentStateIndex];
   let currentU = { ...currentState.u };
   let currentArrowPhi = currentState.phi0;
 
   if (isAnimating) {
-    const nextState = spinors[(currentStateIndex + 1) % spinors.length];
+    const nextState = SPINORS[(currentStateIndex + 1) % SPINORS.length];
     const easedProgress = easeInOutCubic(transitionProgress);
     currentU = {
       x: currentState.u.x * (1 - easedProgress) + nextState.u.x * easedProgress,
@@ -465,6 +462,9 @@ export default function HypersphereVisualization({
       blochVector: bloch,
       gateName: currentState.name,
     });
+    // currentArrowPhi, currentU, and currentState.name are all derived from
+    // currentStateIndex + transitionProgress + isAnimating (the listed deps),
+    // so they don't need to be listed separately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStateIndex, transitionProgress, isAnimating, computeBlochVector]);
 
@@ -482,7 +482,7 @@ export default function HypersphereVisualization({
     const arrowPhi = currentArrowPhi;
     let visualScale = currentState.radiusScale ?? 1.0;
     if (isAnimating) {
-      const nextState = spinors[(currentStateIndex + 1) % spinors.length];
+      const nextState = SPINORS[(currentStateIndex + 1) % SPINORS.length];
       const easedProgress = easeInOutCubic(transitionProgress);
       const nextScale = nextState.radiusScale ?? 1.0;
       visualScale = visualScale * (1 - easedProgress) + nextScale * easedProgress;
@@ -606,14 +606,14 @@ export default function HypersphereVisualization({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: '#94a3b8', fontSize: '14px' }}>Gate:</span>
               <span style={{ color: '#22d3ee', fontSize: '14px', fontWeight: 600 }}>
-                {spinors[currentStateIndex].name}
+                {SPINORS[currentStateIndex].name}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ color: '#94a3b8', fontSize: '14px' }}>φ:</span>
               <span style={{ color: '#ffffff', fontSize: '14px', fontFamily: 'monospace' }}>
-                {spinors[currentStateIndex].phi0.toFixed(3)} rad
+                {SPINORS[currentStateIndex].phi0.toFixed(3)} rad
               </span>
             </div>
           </div>
@@ -621,4 +621,4 @@ export default function HypersphereVisualization({
       )}
     </div>
   );
-}
+});
