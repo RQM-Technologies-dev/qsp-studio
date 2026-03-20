@@ -6,6 +6,7 @@ interface ModeSelectorProps {
   onChange: (mode: DemoMode) => void;
 }
 
+// Note: 'quaternionic' mode is intentionally excluded from this navigation.
 const modes: { key: DemoMode; label: string; sublabel: string; color: string }[] = [
   {
     key: 'complex',
@@ -18,12 +19,6 @@ const modes: { key: DemoMode; label: string; sublabel: string; color: string }[]
     label: 'Polarization',
     sublabel: 'EM wave polarization ellipse — spatial oscillation mode in 3D',
     color: '#8b5cf6',
-  },
-  {
-    key: 'quaternionic',
-    label: 'Quaternionic / QAM',
-    sublabel: 'Quaternionic unified state — geometric QAM across the full EM spectrum',
-    color: '#f59e0b',
   },
 ];
 

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { flushSync } from 'react-dom';
 import { MainScene } from '../scenes/MainScene';
 import { ControlPanel } from '../ui/ControlPanel';
 import { ModeSelector } from '../ui/ModeSelector';
@@ -8,6 +7,8 @@ import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { ReceptionMeter } from '../ui/ReceptionMeter';
+import HypersphereVisualization, { QuantumState } from '../features/HypersphereVisualization';
+import { BlochSphere } from '../features/BlochSphere';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 import { SignalBuffer, sampleSignal, BUFFER_SIZE, SAMPLE_INTERVAL_MS } from '../math/signalBuffer';
 import { computeSpectrum, SpectrumData } from '../math/dft';
@@ -29,6 +30,9 @@ export default function App() {
   const [showClassicalSplit, setShowClassicalSplit] = useState(false);
   const [showProjectionPlanes, setShowProjectionPlanes] = useState(false);
   const [sweepMode, setSweepMode] = useState<SweepMode>('none');
+
+  // ── Quantum state from HypersphereVisualization (for Bloch sphere sync) ─
+  const [quantumState, setQuantumState] = useState<QuantumState | null>(null);
 
   // ── Layer visibility toggles ────────────────────────────────────────────
   const [showBasis, setShowBasis] = useState(true);
@@ -178,15 +182,16 @@ export default function App() {
   }, []);
 
   // ── DFT update — setInterval at ~10 Hz ───────────────────────────────────
-  // flushSync guarantees React commits this state update synchronously,
-  // bypassing the MessageChannel scheduler that can stall in headless/throttled
-  // environments. At 10 Hz the synchronous flush cost is negligible.
+  // Regular setState is safe here: React 18 auto-batches updates outside event
+  // handlers. Avoid flushSync which can interact with concurrent animation
+  // RAF loops (from HypersphereVisualization) and trigger "Maximum update
+  // depth exceeded" warnings in development mode.
   useEffect(() => {
     const id = setInterval(() => {
       const samples = signalBufferRef.current.getAll();
       const result = computeSpectrum(samples, paramsRef.current.frequency);
       if (result !== null) {
-        flushSync(() => setSpectrumData(result));
+        setSpectrumData(result);
       }
     }, DFT_INTERVAL_MS);
     return () => clearInterval(id);
@@ -234,6 +239,22 @@ export default function App() {
         onSweepModeChange={handleSweepModeChange}
         onApplyPreset={(p) => { handleParamsChange(p); setSweepMode('none'); }}
       />
+
+      {/* ── Quantum visualization row — Bloch sphere (left) + Hypersphere (right) ── */}
+      <div className="quantum-row">
+        <div className="bloch-panel">
+          <BlochSphere width={260} height={280} state={quantumState} />
+        </div>
+        <div className="hypersphere-panel">
+          <HypersphereVisualization
+            width={860}
+            height={340}
+            showControls
+            onStateChange={setQuantumState}
+          />
+        </div>
+      </div>
+
       <div className="scene-wrapper">
         <MainScene
           params={params}

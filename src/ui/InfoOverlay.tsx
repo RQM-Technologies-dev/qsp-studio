@@ -1,27 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { DemoMode } from '../math/signal';
 
-/** Per-mode teaching content — wording follows the product framing exactly. */
-const modeInfo: Record<DemoMode, {
+/** Render a LaTeX string inline with KaTeX. */
+function KatexInline({ tex }: { tex: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    try {
+      katex.render(tex, ref.current, { throwOnError: false, displayMode: false });
+    } catch {
+      if (ref.current) ref.current.textContent = tex;
+    }
+  }, [tex]);
+  return <span ref={ref} />;
+}
+
+/** Render a LaTeX string as a display-mode block with KaTeX. */
+function KatexDisplay({ tex }: { tex: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    try {
+      katex.render(tex, ref.current, { throwOnError: false, displayMode: true });
+    } catch {
+      if (ref.current) ref.current.textContent = tex;
+    }
+  }, [tex]);
+  return <span ref={ref} />;
+}
+
+/** Per-mode teaching content (quaternionic mode excluded from nav). */
+const modeInfo: Partial<Record<DemoMode, {
   title: string;
-  basis: string;
+  basisTex: string;
   body: string;
-  components: { label: string; note: string }[];
+  components: { labelTex: string; note: string }[];
   transformQ: string;
   receptionNote: string;
-}> = {
+}>> = {
   complex: {
     title: 'Classical Complex View — Planar Rotation',
-    basis: 'Basis: e^{iθ} · planar rotation on the unit circle',
+    basisTex: 'e^{i\\theta} \\cdot \\text{planar rotation on the unit circle}',
     body:
       'A complex sinusoid traces a circle in the XY plane. ' +
       'Phase is one scalar angle. Real and imaginary parts are two separate ' +
       'projections of a single planar rotation — nothing more.',
     components: [
-      { label: 'Re (X)',    note: 'real projection — cos θ' },
-      { label: 'Im (Y)',    note: 'imaginary projection — sin θ' },
-      { label: 'Phase θ', note: 'one scalar angle' },
-      { label: '—',        note: 'no orientation, no polarization' },
+      { labelTex: '\\operatorname{Re}(x)',  note: 'real projection' },
+      { labelTex: '\\cos\\theta',           note: 'in-phase component' },
+      { labelTex: '\\operatorname{Im}(y)',  note: 'imaginary projection' },
+      { labelTex: '\\sin\\theta',           note: 'quadrature component' },
     ],
     transformQ:
       'Classical Fourier asks: which planar rotations are present? ' +
@@ -35,16 +65,16 @@ const modeInfo: Record<DemoMode, {
   },
   polarized: {
     title: 'Polarization Geometry — Spatial Oscillation',
-    basis: 'Basis: oriented elliptical oscillation in 3D space',
+    basisTex: '\\text{Oriented elliptical oscillation in 3D space}',
     body:
       'The signal tip traces a corkscrew helix — a polarization ellipse propagating ' +
       'through space. Ellipticity and orientation are now geometrically encoded, ' +
       'not just parameters bolted on top. The helix makes the spatial structure visible.',
     components: [
-      { label: 'Major a',      note: 'semi-major axis length' },
-      { label: 'Minor b',      note: 'semi-minor axis (= a · ellipticity)' },
-      { label: 'Ellipticity',  note: 'shape ratio b/a' },
-      { label: 'Normal n̂',    note: 'propagation direction' },
+      { labelTex: 'a',              note: 'semi-major axis length' },
+      { labelTex: 'b = a\\epsilon', note: 'semi-minor axis' },
+      { labelTex: '\\epsilon',      note: 'ellipticity ratio b/a' },
+      { labelTex: '\\hat{n}',       note: 'propagation normal' },
     ],
     transformQ:
       'A polarization-aware transform extracts orientation and ellipticity per frequency — ' +
@@ -55,36 +85,6 @@ const modeInfo: Record<DemoMode, {
       'and the trail dims — the encoded polarization ellipse contracts. ' +
       'Spatial geometry gives some robustness: coupling degrades more gradually than ' +
       'the classical I/Q case, but a severe misalignment still collapses the helix.',
-  },
-  quaternionic: {
-    title: 'Quaternionic Unified View — Unified Geometric State',
-    basis: 'Basis: quaternion q = w + xi + yj + zk (one four-component object)',
-    body:
-      'Phase, orientation, and polarization merge into one evolving quaternionic state. ' +
-      'The local frame at the tip encodes 3D orientation. The pulsing halo encodes the ' +
-      'scalar component w — the hidden 4th dimension projected into 3D space. ' +
-      'Fiber rings along the trail evoke the Hopf fibration: each visible point carries ' +
-      'a hidden rotating circle.',
-    components: [
-      { label: 'w (scalar)', note: 'real part — drives halo pulse rate' },
-      { label: 'i (axis-x)', note: 'orientation along x' },
-      { label: 'j (axis-y)', note: 'orientation along y' },
-      { label: 'k (axis-z)', note: 'orientation along z' },
-    ],
-    transformQ:
-      'Quaternionic Fourier asks: which unified geometric modes are present — ' +
-      'including phase, orientation, and polarization structure together? ' +
-      'Each coefficient is a full quaternion, not a complex number. ' +
-      'One transform extracts what classical methods need three separate analyses to see.',
-    receptionNote:
-      'The quaternionic structure IS the receiving unified frame. ' +
-      'When the frame tilts, the orbit shrinks, the halo dims, and fiber rings fade — ' +
-      'but the quaternionic geometry uses all three axes simultaneously, so it maintains ' +
-      'partial coupling (≥ 57%) even at extreme single-axis misalignment. ' +
-      'This robustness is not accidental: richer geometric encoding captures more of the ' +
-      'incoming field under imperfect conditions. ' +
-      'Rotate the sensing frame to see the quaternionic structure degrade more gracefully than ' +
-      'the classical phasor.',
   },
 };
 
@@ -100,7 +100,21 @@ interface InfoOverlayProps {
 export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayProps) {
   const [open, setOpen] = useState(true);
   const [showTransform, setShowTransform] = useState(false);
-  const { title, basis, body, components, transformQ, receptionNote } = modeInfo[demoMode];
+  const info = modeInfo[demoMode];
+
+  // If the current mode has no info (e.g., quaternionic is not in the nav),
+  // show a minimal placeholder so the overlay still opens/closes.
+  if (!info) {
+    return (
+      <div className={`info-overlay ${open ? 'open' : 'closed'}`}>
+        <button className="info-toggle" onClick={() => setOpen(!open)}>
+          {open ? '✕' : 'ℹ'}
+        </button>
+      </div>
+    );
+  }
+
+  const { title, basisTex, body, components, transformQ, receptionNote } = info;
 
   return (
     <div className={`info-overlay ${open ? 'open' : 'closed'}`}>
@@ -111,7 +125,9 @@ export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayP
         <div className="info-content">
           <p className="info-aha">{AHA_SENTENCE}</p>
           <h3>{title}</h3>
-          <p className="info-basis">{basis}</p>
+          <p className="info-basis">
+            <KatexDisplay tex={basisTex} />
+          </p>
           <p>{body}</p>
 
           {/* Component decomposition readout */}
@@ -120,7 +136,9 @@ export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayP
             <ul>
               {components.map((c, i) => (
                 <li key={i}>
-                  <span className="info-comp-label">{c.label}</span>
+                  <span className="info-comp-label">
+                    <KatexInline tex={c.labelTex} />
+                  </span>
                   <span className="info-comp-note">{c.note}</span>
                 </li>
               ))}
@@ -138,7 +156,7 @@ export function InfoOverlay({ demoMode, showIncomingWave = false }: InfoOverlayP
             <p className="info-transform">{transformQ}</p>
           )}
 
-          {/* Direct reception panel — shown when incoming wave layer is active */}
+          {/* Direct reception panel */}
           {showIncomingWave && (
             <div className="info-pipeline">
               <span className="info-pipeline-label">Direct Geometric Reception</span>
