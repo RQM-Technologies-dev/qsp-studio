@@ -8,6 +8,8 @@ import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { ReceptionMeter } from '../ui/ReceptionMeter';
+import HypersphereVisualization, { QuantumState } from '../features/HypersphereVisualization';
+import { BlochSphere } from '../features/BlochSphere';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 import { SignalBuffer, sampleSignal, BUFFER_SIZE, SAMPLE_INTERVAL_MS } from '../math/signalBuffer';
 import { computeSpectrum, SpectrumData } from '../math/dft';
@@ -29,6 +31,9 @@ export default function App() {
   const [showClassicalSplit, setShowClassicalSplit] = useState(false);
   const [showProjectionPlanes, setShowProjectionPlanes] = useState(false);
   const [sweepMode, setSweepMode] = useState<SweepMode>('none');
+
+  // ── Quantum state from HypersphereVisualization (for Bloch sphere sync) ─
+  const [quantumState, setQuantumState] = useState<QuantumState | null>(null);
 
   // ── Layer visibility toggles ────────────────────────────────────────────
   const [showBasis, setShowBasis] = useState(true);
@@ -234,6 +239,22 @@ export default function App() {
         onSweepModeChange={handleSweepModeChange}
         onApplyPreset={(p) => { handleParamsChange(p); setSweepMode('none'); }}
       />
+
+      {/* ── Quantum visualization row — Bloch sphere (left) + Hypersphere (right) ── */}
+      <div className="quantum-row">
+        <div className="bloch-panel">
+          <BlochSphere width={260} height={280} state={quantumState} />
+        </div>
+        <div className="hypersphere-panel">
+          <HypersphereVisualization
+            width={860}
+            height={340}
+            showControls
+            onStateChange={setQuantumState}
+          />
+        </div>
+      </div>
+
       <div className="scene-wrapper">
         <MainScene
           params={params}
