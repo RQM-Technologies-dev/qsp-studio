@@ -1041,3 +1041,24 @@ body {
   font-style: italic;
   text-align: right;
 }
+
+/* Drag-to-rotate interaction hint */
+.modem-hud-hint {
+  font-size: 0.60rem;
+  font-weight: 600;
+  color: rgba(99, 102, 241, 0.75);
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin: 0.1rem 0 0.15rem;
+  text-transform: uppercase;
+}
+
+.modem-hud-hint-active {
+  color: #818cf8;
+  animation: qmodem-hint-pulse 1s ease-in-out infinite;
+}
+
+@keyframes qmodem-hint-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.60; }
+}
