@@ -915,16 +915,21 @@ body {
   color: #4ade80;
 }
 
+.modem-hud-lock-weak {
+  color: #facc15;
+}
+
 .modem-hud-lock-off {
   color: #f87171;
 }
 
 .modem-hud-bar-track {
+  position: relative;
   width: 100%;
   height: 3px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
-  margin: 0.35rem 0 0.4rem;
+  margin: 0.35rem 0 0.25rem;
   overflow: hidden;
 }
 
@@ -932,6 +937,24 @@ body {
   height: 100%;
   border-radius: 2px;
   transition: width 0.2s ease, background 0.3s ease;
+}
+
+/* Threshold guide — tick marks on the confidence bar.
+   Two <span> children with inline left% styles are positioned via absolute. */
+.modem-hud-thresh-guide {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  margin-bottom: 0.3rem;
+}
+
+.modem-hud-thresh-guide span {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateX(-50%);
 }
 
 .modem-hud-legend {

@@ -261,6 +261,8 @@ export function classifyRecoveredSymbol(
   for (let i = 0; i < samples.length - 1; i++) {
     signedArea += samples[i][1] * samples[i + 1][2] - samples[i + 1][1] * samples[i][2];
   }
-  // R_CIRC traces clockwise in YZ (z leads y by π/2), L_CIRC traces counter-clockwise
+  // R_CIRC: δ = -π/2 means z lags y by π/2 → clockwise winding in YZ viewed from +X
+  //             → Σ(y·z' - y'·z) < 0  (negative signed area)
+  // L_CIRC: δ = +π/2 means z leads y by π/2 → counter-clockwise → signed area > 0
   return signedArea < 0 ? R_CIRC : L_CIRC;
 }
