@@ -12,6 +12,32 @@
  *   Cyan   — measured  (projection onto the rotating receiver plane)
  *   Green  — recovered (symbol after inverse quaternion alignment)
  *
+ * ── Recovery model — v1 (KNOWN q_eff) ───────────────────────────────────────
+ * Recovery in this demo uses PERFECT KNOWLEDGE of the effective orientation:
+ *   q_eff = q_channel × q_receiver
+ *
+ * Both quaternions are synthesised by the animation loop and passed directly
+ * to the inversion stage — this is NOT adaptive estimation.  The recovered
+ * ellipse degrades only with projection-energy loss (bad geometry), not with
+ * orientation-estimation error.
+ *
+ * The next engineering milestone is to ESTIMATE q_eff from pilot symbols or
+ * signal history, so the modem can operate without privileged orientation data.
+ *
+ * ── Pilot / Training mode ────────────────────────────────────────────────────
+ * The symbol stream alternates between:
+ *   PILOT phase  — a known calibration symbol (LIN_Y) is transmitted for a
+ *                  short burst.  In a production system, the receiver would use
+ *                  this to estimate q_eff.  Here it is labelled honestly.
+ *   DATA phase   — normal data symbols decoded against the (known) q_eff.
+ *                  Stats are accumulated only during the data phase.
+ *
+ * ── Jitter — estimation fragility, not a physical wave effect ────────────────
+ * When confidence falls below CONF_WEAK, the recovered ellipse is rendered with
+ * a time-varying perturbation.  This represents RECOVERY INSTABILITY caused by
+ * low projection energy (underdetermined geometry) — NOT any physical jitter in
+ * the EM wave.  The transmitted wave is always smooth and Maxwell-consistent.
+ *
  * Honest failure modes:
  *   • At low confidence the recovered ellipse fades, collapses, and jitters
  *   • LOCK degrades: LOCKED → WEAK → UNLOCKED
@@ -57,8 +83,20 @@ import {
 /** Number of parametric sample points for each ellipse. */
 const ELLIPSE_N = 64;
 
-/** Seconds each polarization symbol is displayed before switching. */
+/** Seconds each DATA polarization symbol is displayed before switching. */
 const SYMBOL_DWELL = 4.0;
+
+/** Seconds for each PILOT burst (shorter than data dwell). */
+const PILOT_DWELL = 1.5;
+
+/** Number of data symbols transmitted between pilot bursts. */
+const DATA_PER_PILOT = 3;
+
+/**
+ * Index into MODEM_SYMBOLS used as the calibration / pilot symbol (LIN_Y).
+ * A production receiver would observe this known symbol to estimate q_eff.
+ */
+const PILOT_SYMBOL_IDX = 0; // LIN_Y
 
 /** Confidence ≥ this → LOCKED (green HUD). */
 const CONF_LOCKED = 0.62;
@@ -81,13 +119,15 @@ const CHANNEL_RATE = 0.07;
  *   [3/√14, 1/√14, 2/√14] ≈ [0.8018, 0.2673, 0.5345]
  * Different from all receiver rotation axes so channel adds independent distortion.
  */
-const _sqrt14 = Math.sqrt(14);
-const CHANNEL_AXIS: Vec3 = [3 / _sqrt14, 1 / _sqrt14, 2 / _sqrt14];
+const SQRT_14 = Math.sqrt(14);
+const CHANNEL_AXIS: Vec3 = [3 / SQRT_14, 1 / SQRT_14, 2 / SQRT_14];
 
 /**
  * Amplitude of jitter applied to each recovered-ellipse point when confidence is weak.
- * Scaled by the fraction of confidence below CONF_WEAK, so jitter = 0 at CONF_WEAK
- * and peaks at max amplitude below CONF_UNKNOWN.
+ *
+ * CONCEPTUAL NOTE: jitter represents RECOVERY INSTABILITY (estimation fragility) —
+ * the uncertainty in the recovered symbol shape when observation geometry is
+ * underdetermined.  It is NOT a physical wave effect.
  */
 const JITTER_AMP_SCALE = 0.18;
 
@@ -104,9 +144,27 @@ const AXIS_SCALE = 1.3;
 /** Radius of the live-dot spheres. */
 const DOT_RADIUS = 0.045;
 
-// ── Lock-state type ───────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type LockState = 'locked' | 'weak' | 'unlocked';
+
+/** Current transmission phase: PILOT burst or DATA stream. */
+type Phase = 'pilot' | 'data';
+
+/**
+ * Per-session modem statistics accumulated over data symbols only
+ * (pilot bursts are excluded from the error counters).
+ */
+interface ModemStats {
+  /** Total data symbols transmitted (excluding pilot bursts). */
+  sent: number;
+  /** Data symbols whose decoded name matched the transmitted name. */
+  decoded: number;
+  /** Data symbols decoded as UNKNOWN (projection energy too low). */
+  unknowns: number;
+  /** Data symbols decoded incorrectly (wrong name, but not UNKNOWN). */
+  errors: number;
+}
 
 /**
  * Synthetic symbol representing an undecodable/unknown state.
@@ -187,6 +245,19 @@ function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: numb
   );
 }
 
+// ── Helper: compute Symbol Error Rate % from modem stats ─────────────────────
+
+/**
+ * Returns the symbol error rate as a percentage integer [0, 100], or null
+ * when no data symbols have been sent yet.
+ *
+ *   SER % = (errors + unknowns) / sent × 100
+ */
+function computeSER(stats: ModemStats): number | null {
+  if (stats.sent === 0) return null;
+  return Math.round((stats.errors + stats.unknowns) / stats.sent * 100);
+}
+
 /**
  * Compact HUD overlay rendered as HTML inside the Canvas via drei's Html.
  *
@@ -194,17 +265,27 @@ function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: numb
  *   LOCKED  — confidence ≥ CONF_LOCKED  (green)
  *   WEAK    — confidence ≥ CONF_WEAK    (yellow) — decode may be unreliable
  *   UNLOCKED— confidence < CONF_WEAK   (red)    — RX = UNKNOWN
+ *
+ * Phase:
+ *   PILOT — known calibration burst; receiver would estimate q_eff here
+ *   DATA  — data symbol decoding using (known) q_eff
  */
 function ModemHud({
   txSymbol,
   rxSymbol,
   confidence,
   lockState,
+  phase,
+  stats,
+  jitterActive,
 }: {
   txSymbol: PolarizationSymbol;
   rxSymbol: PolarizationSymbol;
   confidence: number;
   lockState: LockState;
+  phase: Phase;
+  stats: ModemStats;
+  jitterActive: boolean;
 }) {
   const pct = Math.round(confidence * 100);
   const isUnknown = rxSymbol.name === 'UNKNOWN';
@@ -216,8 +297,8 @@ function ModemHud({
     /* unlocked */             '#f87171';
 
   const lockLabel =
-    lockState === 'locked'   ? '\u2713 LOCKED' :
-    lockState === 'weak'     ? '\u25b2 WEAK'   :
+    lockState === 'locked'   ? '\u2713 LOCKED'   :
+    lockState === 'weak'     ? '\u25b2 WEAK'     :
     /* unlocked */             '\u2717 UNLOCKED';
 
   const lockClass =
@@ -225,10 +306,21 @@ function ModemHud({
     lockState === 'weak'     ? 'modem-hud-lock-weak' :
     /* unlocked */             'modem-hud-lock-off';
 
+  const ser = computeSER(stats);
+  const serColor = ser === null ? 'var(--text-dim)' : ser === 0 ? '#4ade80' : ser < 30 ? '#facc15' : '#f87171';
+
   return (
     <Html fullscreen zIndexRange={[10, 10]} style={{ pointerEvents: 'none' }}>
       <div className="modem-hud">
         <div className="modem-hud-title">Quaternionic Modem</div>
+
+        {/* Phase indicator */}
+        <div className="modem-hud-row">
+          <span className="modem-hud-label">MODE</span>
+          <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : 'modem-hud-phase-data'}`}>
+            {phase === 'pilot' ? '\u25c6 PILOT' : '\u25b6 DATA'}
+          </span>
+        </div>
 
         <div className="modem-hud-row">
           <span className="modem-hud-label">TX</span>
@@ -237,8 +329,8 @@ function ModemHud({
 
         <div className="modem-hud-row">
           <span className="modem-hud-label">RX</span>
-          <span className={`modem-hud-value ${isUnknown ? 'modem-hud-lock-off' : match ? 'modem-hud-match' : 'modem-hud-mismatch'}`}>
-            {rxSymbol.name}
+          <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : isUnknown ? 'modem-hud-lock-off' : match ? 'modem-hud-match' : 'modem-hud-mismatch'}`}>
+            {phase === 'pilot' ? 'CAL\u2026' : rxSymbol.name}
           </span>
         </div>
 
@@ -263,12 +355,39 @@ function ModemHud({
           />
         </div>
 
-        {/* Confidence thresholds guide markers */}
+        {/* Threshold tick marks at CONF_WEAK and CONF_LOCKED positions */}
         <div className="modem-hud-thresh-guide">
           <span style={{ left: `${Math.round(CONF_WEAK * 100)}%` }} />
           <span style={{ left: `${Math.round(CONF_LOCKED * 100)}%` }} />
         </div>
 
+        {/* Jitter warning — shown when recovery is unstable due to low energy */}
+        {jitterActive && (
+          <div className="modem-hud-unstable">
+            &#9888; REC UNSTABLE
+          </div>
+        )}
+
+        {/* ── Modem stats (data symbols only; pilot excluded) ── */}
+        <div className="modem-hud-divider" />
+        <div className="modem-hud-stats-title">LINK STATS</div>
+        <div className="modem-hud-stats-grid">
+          <span className="modem-hud-label">TX</span>
+          <span className="modem-hud-value">{stats.sent}</span>
+          <span className="modem-hud-label">OK</span>
+          <span className="modem-hud-value modem-hud-match">{stats.decoded}</span>
+          <span className="modem-hud-label">ERR</span>
+          <span className="modem-hud-value modem-hud-mismatch">{stats.errors}</span>
+          <span className="modem-hud-label">UNK</span>
+          <span className="modem-hud-value modem-hud-lock-off">{stats.unknowns}</span>
+          <span className="modem-hud-label">SER</span>
+          <span className="modem-hud-value" style={{ color: serColor }}>
+            {ser !== null ? `${ser}%` : '\u2014'}
+          </span>
+        </div>
+
+        {/* Legend */}
+        <div className="modem-hud-divider" />
         <div className="modem-hud-legend">
           <span className="modem-hud-dot" style={{ background: '#f59e0b' }} />
           <span>TX truth</span>
@@ -277,6 +396,9 @@ function ModemHud({
           <span className="modem-hud-dot" style={{ background: '#4ade80' }} />
           <span>Recovered</span>
         </div>
+
+        {/* Conceptual footnote — v1 uses known q_eff, not estimated */}
+        <div className="modem-hud-note">q_eff: known (demo v1)</div>
       </div>
     </Html>
   );
@@ -287,14 +409,15 @@ function ModemHud({
 /**
  * Apply a time-varying but deterministic per-point perturbation to ellipse points.
  *
- * When confidence falls below CONF_WEAK the recovered ellipse should visually
- * jitter to communicate unreliable geometry — matching the physical reality that
- * low projection energy means the recovered signal is unstable.
+ * CONCEPTUAL NOTE: This represents RECOVERY INSTABILITY (estimation fragility)
+ * caused by low projection energy — the underdetermined observation geometry means
+ * the recovered symbol shape is uncertain.  It does NOT model any physical jitter
+ * in the electromagnetic wave, which remains perfectly smooth and transverse.
  *
- * @param pts - Input ellipse points (modified in place via new array)
+ * @param pts - Input ellipse points
  * @param amplitude - Scene amplitude (sets jitter scale)
  * @param jitterFrac - [0, 1] fraction of max jitter (0 = no jitter)
- * @param currentTime - Used to make jitter time-varying
+ * @param currentTime - Used to make the instability time-varying
  */
 function applyJitter(
   pts: [number, number, number][],
@@ -324,20 +447,21 @@ export interface QuaternionicModemDemoProps {
  * QuaternionicModemDemo — full modem visualization in a single self-animating
  * Three.js group.  Insert directly into an R3F Canvas (wrapped by MainScene).
  *
- * Demonstrates three failure modes:
- *   1. Receiver tilt alone (receiver tumbles, channel static)
- *   2. Channel rotation combined with receiver tilt (q_eff = q_ch × q_rx)
- *   3. Near-degenerate orientation: confidence collapses, lock fails, RX = UNKNOWN
+ * Symbol stream:
+ *   PILOT (LIN_Y, 1.5 s) → DATA × 3 (4 s each) → PILOT → …
+ *
+ * Recovery model: v1 — known q_eff (not estimated).
+ * Jitter = estimation fragility, not a physical wave effect.
  */
 export function QuaternionicModemDemo({
   params,
   currentTime,
   opacity = 1,
 }: QuaternionicModemDemoProps) {
-  const { amplitude, frequency, phase } = params;
+  const { amplitude, frequency, phase: signalPhase } = params;
 
   // ── Animation refs — mutated every frame without triggering re-renders ────
-  const symbolIdxRef     = useRef(0);
+  const symbolIdxRef     = useRef(PILOT_SYMBOL_IDX);
   const symbolTimerRef   = useRef(0);
   const yawRef           = useRef(0);
   const qReceiverRef     = useRef<Quat>([1, 0, 0, 0]);
@@ -346,22 +470,73 @@ export function QuaternionicModemDemo({
   const qEffRef          = useRef<Quat>([1, 0, 0, 0]);
   const hudTickRef       = useRef(0);
 
+  // Phase-state refs
+  const phaseRef         = useRef<Phase>('pilot');
+  const dataCountRef     = useRef(0);   // data symbols sent in current cycle
+  const nextDataIdxRef   = useRef(0);   // next data symbol index (advances across pilots)
+
+  // Stats ref — mutated at symbol boundaries to avoid mid-frame state churn
+  const statsRef  = useRef<ModemStats>({ sent: 0, decoded: 0, unknowns: 0, errors: 0 });
+  // Last decoded RX symbol — used for stats counting at symbol boundary
+  const lastRxRef = useRef<PolarizationSymbol>(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
+
   // ── React state — drives 3D ellipses (every frame) and HUD (~10 Hz) ──────
-  const [txSymbol,   setTxSymbol]   = useState<PolarizationSymbol>(MODEM_SYMBOLS[0]);
-  const [rxSymbol,   setRxSymbol]   = useState<PolarizationSymbol>(MODEM_SYMBOLS[0]);
+  const [txSymbol,   setTxSymbol]   = useState<PolarizationSymbol>(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
+  const [rxSymbol,   setRxSymbol]   = useState<PolarizationSymbol>(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
   const [confidence, setConfidence] = useState(1.0);
   const [lockState,  setLockState]  = useState<LockState>('locked');
   // Stored as [w, x, y, z]; converted to Three.js [x, y, z, w] for the group prop
   const [effectiveQ, setEffectiveQ] = useState<Quat>([1, 0, 0, 0]);
+  const [txPhase,    setTxPhase]    = useState<Phase>('pilot');
+  const [stats,      setStats]      = useState<ModemStats>({ sent: 0, decoded: 0, unknowns: 0, errors: 0 });
 
   // ── Per-frame animation loop ──────────────────────────────────────────────
   useFrame((_, delta) => {
-    // 1. Symbol stream
+    // 1. Symbol / phase stream
     symbolTimerRef.current += delta;
-    if (symbolTimerRef.current >= SYMBOL_DWELL) {
-      symbolTimerRef.current -= SYMBOL_DWELL;
-      symbolIdxRef.current = (symbolIdxRef.current + 1) % MODEM_SYMBOLS.length;
-      setTxSymbol(MODEM_SYMBOLS[symbolIdxRef.current]);
+    const dwellTime = phaseRef.current === 'pilot' ? PILOT_DWELL : SYMBOL_DWELL;
+
+    if (symbolTimerRef.current >= dwellTime) {
+      symbolTimerRef.current -= dwellTime;
+
+      if (phaseRef.current === 'pilot') {
+        // Pilot burst complete → begin data phase
+        phaseRef.current = 'data';
+        dataCountRef.current = 0;
+        symbolIdxRef.current = nextDataIdxRef.current;
+        setTxPhase('data');
+        setTxSymbol(MODEM_SYMBOLS[nextDataIdxRef.current]);
+      } else {
+        // Data symbol complete — count stats before advancing
+        const tx = MODEM_SYMBOLS[symbolIdxRef.current];
+        const rx = lastRxRef.current;
+        statsRef.current.sent++;
+        if (rx.name === 'UNKNOWN') {
+          statsRef.current.unknowns++;
+        } else if (rx.name !== tx.name) {
+          statsRef.current.errors++;
+        } else {
+          statsRef.current.decoded++;
+        }
+
+        // Advance to next data symbol or return to pilot
+        nextDataIdxRef.current = (nextDataIdxRef.current + 1) % MODEM_SYMBOLS.length;
+        dataCountRef.current++;
+
+        if (dataCountRef.current >= DATA_PER_PILOT) {
+          // Data phase complete → return to pilot burst
+          phaseRef.current = 'pilot';
+          symbolIdxRef.current = PILOT_SYMBOL_IDX;
+          setTxPhase('pilot');
+          setTxSymbol(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
+        } else {
+          // Next data symbol
+          symbolIdxRef.current = nextDataIdxRef.current;
+          setTxSymbol(MODEM_SYMBOLS[nextDataIdxRef.current]);
+        }
+
+        setStats({ ...statsRef.current });
+      }
     }
 
     // 2. Receiver quaternion — smooth multi-axis tumble, gimbal-lock free
@@ -382,8 +557,8 @@ export function QuaternionicModemDemo({
       quatFromAxisAngle(CHANNEL_AXIS, channelAngleRef.current),
     );
 
-    // 4. Effective quaternion: q_eff = q_channel * q_receiver
-    //    The receiver senses through the combined orientation; recovery inverts q_eff.
+    // 4. Effective quaternion: q_eff = q_channel × q_receiver
+    //    Recovery inverts q_eff using PERFECT KNOWLEDGE (v1 demo — not estimated).
     qEffRef.current = quatNormalize(quatMultiply(qChannelRef.current, qReceiverRef.current));
     setEffectiveQ([...qEffRef.current] as Quat);
 
@@ -404,6 +579,7 @@ export function QuaternionicModemDemo({
         ? classifyRecoveredSymbol(ELLIPSE_N, sym.Ay, sym.Az, sym.delta, qEffRef.current, r1, r2)
         : UNKNOWN_SYMBOL;
 
+      lastRxRef.current = recovered;
       setConfidence(conf);
       setLockState(newLock);
       setRxSymbol(recovered);
@@ -425,28 +601,30 @@ export function QuaternionicModemDemo({
     ELLIPSE_N, sym.Ay * amplitude, sym.Az * amplitude, sym.delta, r1, r2,
   ).map(p => p as [number, number, number]);
 
-  // Recovered ellipse in canonical world YZ-plane after inverse quaternion alignment
-  // May have low amplitude when confidence is poor (physically correct).
+  // Recovered ellipse in canonical world YZ-plane after inverse quaternion alignment.
+  // Degrades with projection energy loss (geometry), not estimation error (v1 demo).
   const recoveredPtsRaw = sampleRecoveredEllipse(
     ELLIPSE_N, sym.Ay * amplitude, sym.Az * amplitude, sym.delta, effectiveQ, r1, r2,
   ).map(p => p as [number, number, number]);
 
-  // Jitter fraction: 0 when confidence ≥ CONF_WEAK, increases below CONF_WEAK
+  // Jitter fraction: 0 when confidence ≥ CONF_WEAK, increases below CONF_WEAK.
+  // Represents estimation fragility, not physical wave instability.
   const jitterFrac = confidence < CONF_WEAK
     ? Math.min(1, (CONF_WEAK - confidence) / CONF_WEAK)
     : 0;
+  const jitterActive = jitterFrac > 0.001;
   const recoveredPts = applyJitter(recoveredPtsRaw, amplitude, jitterFrac, currentTime);
 
   // Live dot positions at the current carrier phase θ
-  const theta = 2 * Math.PI * frequency * currentTime + phase;
+  const theta = 2 * Math.PI * frequency * currentTime + signalPhase;
   const worldDot = evaluateField(
     theta, sym.Ay * amplitude, sym.Az * amplitude, sym.delta,
   ) as [number, number, number];
   const { v1, v2, E_proj_world } = projectFieldToReceiver(worldDot, r1, r2);
   const recDot = recoverToCanonical(E_proj_world, effectiveQ) as [number, number, number];
 
-  // Apply same jitter to live dot when confidence is low
-  const recDotJittered: [number, number, number] = jitterFrac > 0.001 ? [
+  // Apply same jitter to live dot when confidence is low (estimation fragility)
+  const recDotJittered: [number, number, number] = jitterActive ? [
     recDot[0],
     recDot[1] + jitterFrac * JITTER_AMP_SCALE * amplitude * Math.sin(currentTime * 11.3 + 99),
     recDot[2] + jitterFrac * JITTER_AMP_SCALE * amplitude * Math.cos(currentTime * 8.7  + 33),
@@ -537,7 +715,9 @@ export function QuaternionicModemDemo({
 
       {/* ── 4. Recovered ellipse (green) — canonical world YZ-plane ─────────── */}
       {/* R(q_eff)^{-1} · E_proj_world — matches amber when lock is good.        */}
-      {/* Fades, jitters, and collapses when confidence is low (honest physics).  */}
+      {/* Fades + jitters when confidence is low (estimation fragility, not       */}
+      {/* physical wave noise).  The amplitude also collapses with projection     */}
+      {/* energy loss — both effects are honest physics.                          */}
       {recoveredPts.length >= 2 && (
         <Line
           points={recoveredPts}
@@ -566,6 +746,9 @@ export function QuaternionicModemDemo({
         rxSymbol={rxSymbol}
         confidence={confidence}
         lockState={lockState}
+        phase={txPhase}
+        stats={stats}
+        jitterActive={jitterActive}
       />
     </group>
   );

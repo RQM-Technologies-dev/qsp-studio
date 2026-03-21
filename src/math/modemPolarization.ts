@@ -19,7 +19,24 @@
  *     r2 = R(q_r)·ê_z   (Q-channel sensing axis)
  *
  * Measurement:  v1 = E·r1,  v2 = E·r2
- * Recovery:     E_rec = R(q_r)^{-1} · (v1·r1 + v2·r2)
+ * Recovery:     E_rec = R(q_eff)^{-1} · (v1·r1 + v2·r2)
+ *
+ * ── Recovery model — v1 DEMO ────────────────────────────────────────────────
+ * The effective quaternion q_eff = q_channel × q_receiver is currently KNOWN
+ * exactly in the visualizer (both q_channel and q_receiver are synthesised
+ * by the animation loop and passed directly to the recovery stage).
+ *
+ * This is "orientation-aware recovery with perfect orientation knowledge" —
+ * NOT blind or adaptive estimation.  The physical wave is computed and
+ * projected correctly; the quaternionic layer inverts a rotation that the
+ * demo already knows.
+ *
+ * The next engineering milestone is to ESTIMATE q_eff from:
+ *   • pilot / training symbols (known calibration bursts)
+ *   • recursive symbol-history tracking
+ *   • external orientation sensors
+ *
+ * Only then does the demo become a true proof-of-concept communications system.
  */
 
 import { Vec3, Quat, rotateVec3ByQuat } from './quaternion';
@@ -37,7 +54,9 @@ export interface PolarizationSymbol {
   delta: number;
 }
 
-/** Canonical 4-symbol QMC polarization alphabet. */
+/** Minimum RMS amplitude below which the recovered ellipse is considered degenerate. */
+const DEGENERATE_THRESHOLD = 1e-6;
+
 export const MODEM_SYMBOLS: PolarizationSymbol[] = [
   { name: 'LIN_Y',  Ay: 1, Az: 0, delta: 0              },
   { name: 'LIN_Z',  Ay: 0, Az: 1, delta: 0              },
@@ -108,6 +127,13 @@ export function projectFieldToReceiver(
  * When receiver alignment is perfect (q_r = identity), E_rec ≡ E (the original field).
  * Under arbitrary orientation, E_rec still reconstructs the canonical symbol shape
  * because we invert the receiver rotation before decoding.
+ *
+ * ── v1 DEMO NOTE ────────────────────────────────────────────────────────────
+ * The quaternion q supplied here is the KNOWN effective orientation q_eff
+ * (synthesised by the animation loop — not estimated from the signal).
+ * Recovery therefore degrades only with projection-energy loss (geometry),
+ * not with orientation-estimation error.  Estimation-induced instability is
+ * the next layer; it is visualised as jitter when confidence is low.
  */
 export function recoverToCanonical(E_proj_world: Vec3, q: Quat): Vec3 {
   const qConj: Quat = [q[0], -q[1], -q[2], -q[3]];
@@ -249,7 +275,7 @@ export function classifyRecoveredSymbol(
 
   const [LIN_Y, LIN_Z, R_CIRC, L_CIRC] = MODEM_SYMBOLS;
 
-  if (total < 1e-6) return LIN_Y; // degenerate: default to LIN_Y
+  if (total < DEGENERATE_THRESHOLD) return LIN_Y; // degenerate: default to LIN_Y
 
   // Linear discrimination: one axis dominates
   if (rmsZ / total < 0.18) return LIN_Y;
