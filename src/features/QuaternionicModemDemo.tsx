@@ -51,8 +51,8 @@
  *   channel-induced polarization rotation.
  */
 
-import { useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useRef, useState, useEffect } from 'react';
+import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Line, Html } from '@react-three/drei';
 import { Mesh } from 'three';
 
@@ -107,10 +107,13 @@ const CONF_WEAK = 0.30;
 /** Confidence < this → UNLOCKED, RX = UNKNOWN. */
 const CONF_UNKNOWN = 0.18;
 
-/** Receiver yaw accumulation rate (radians per second). */
-const YAW_RATE = 0.22;
+/**
+ * Sensitivity of the drag-to-rotate interaction (radians per pixel).
+ * Larger values make the modem rotate faster for the same drag distance.
+ */
+const DRAG_SENSITIVITY = 0.007;
 
-/** Channel quaternion precession rate (rad/s) — slower than receiver rotation. */
+/** Channel quaternion precession rate (rad/s) — slow independent drift. */
 const CHANNEL_RATE = 0.07;
 
 /**
@@ -150,6 +153,16 @@ type LockState = 'locked' | 'weak' | 'unlocked';
 
 /** Current transmission phase: PILOT burst or DATA stream. */
 type Phase = 'pilot' | 'data';
+
+/**
+ * Minimal interface for the Three.js OrbitControls instance registered in the
+ * R3F store via drei's OrbitControls `makeDefault` prop.  The full
+ * `OrbitControls` class is not re-exported by @react-three/drei, so we use the
+ * narrowest interface that satisfies our usage.
+ */
+interface ThreeControls {
+  enabled: boolean;
+}
 
 /**
  * Per-session modem statistics accumulated over data symbols only
@@ -245,6 +258,43 @@ function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: numb
   );
 }
 
+/**
+ * Three concentric gimbal rings rendered in the receiver-local frame.
+ * Each ring lives in one of the three principal planes (YZ, XZ, XY), giving
+ * the visual impression of a gyroscopic gimbal that can be freely rotated.
+ *
+ * The rings rotate with the receiver group, so the user can see all three
+ * planes change orientation as they drag the modem around.
+ */
+function GimbalRings({ amplitude, opacity }: { amplitude: number; opacity: number }) {
+  const N = 64;
+  const r = amplitude * 0.80;
+
+  const yzRing: [number, number, number][] = Array.from({ length: N + 1 }, (_, i) => {
+    const a = (i / N) * 2 * Math.PI;
+    return [0, r * Math.cos(a), r * Math.sin(a)];
+  });
+  const xzRing: [number, number, number][] = Array.from({ length: N + 1 }, (_, i) => {
+    const a = (i / N) * 2 * Math.PI;
+    return [r * Math.cos(a), 0, r * Math.sin(a)];
+  });
+  const xyRing: [number, number, number][] = Array.from({ length: N + 1 }, (_, i) => {
+    const a = (i / N) * 2 * Math.PI;
+    return [r * Math.cos(a), r * Math.sin(a), 0];
+  });
+
+  return (
+    <group>
+      {/* YZ-plane ring — matches the sensing plane (I/Q axes) */}
+      <Line points={yzRing} color="#38bdf8" lineWidth={0.8} transparent opacity={0.30 * opacity} />
+      {/* XZ-plane ring */}
+      <Line points={xzRing} color="#818cf8" lineWidth={0.8} transparent opacity={0.22 * opacity} />
+      {/* XY-plane ring */}
+      <Line points={xyRing} color="#a78bfa" lineWidth={0.8} transparent opacity={0.22 * opacity} />
+    </group>
+  );
+}
+
 // ── Helper: compute Symbol Error Rate % from modem stats ─────────────────────
 
 /**
@@ -278,6 +328,7 @@ function ModemHud({
   phase,
   stats,
   jitterActive,
+  isDragging,
 }: {
   txSymbol: PolarizationSymbol;
   rxSymbol: PolarizationSymbol;
@@ -286,6 +337,7 @@ function ModemHud({
   phase: Phase;
   stats: ModemStats;
   jitterActive: boolean;
+  isDragging: boolean;
 }) {
   const pct = Math.round(confidence * 100);
   const isUnknown = rxSymbol.name === 'UNKNOWN';
@@ -397,6 +449,12 @@ function ModemHud({
           <span>Recovered</span>
         </div>
 
+        {/* Drag-to-rotate hint */}
+        <div className="modem-hud-divider" />
+        <div className={`modem-hud-hint ${isDragging ? 'modem-hud-hint-active' : ''}`}>
+          {isDragging ? '\u21bb ROTATING\u2026' : '\u2630 DRAG MODEM TO ROTATE'}
+        </div>
+
         {/* Conceptual footnote — v1 uses known q_eff, not estimated */}
         <div className="modem-hud-note">q_eff: known (demo v1)</div>
       </div>
@@ -463,12 +521,18 @@ export function QuaternionicModemDemo({
   // ── Animation refs — mutated every frame without triggering re-renders ────
   const symbolIdxRef     = useRef(PILOT_SYMBOL_IDX);
   const symbolTimerRef   = useRef(0);
-  const yawRef           = useRef(0);
   const qReceiverRef     = useRef<Quat>([1, 0, 0, 0]);
   const channelAngleRef  = useRef(0);
   const qChannelRef      = useRef<Quat>([1, 0, 0, 0]);
   const qEffRef          = useRef<Quat>([1, 0, 0, 0]);
   const hudTickRef       = useRef(0);
+
+  // ── Drag-to-rotate interaction refs ──────────────────────────────────────
+  const isDraggingRef    = useRef(false);
+  const lastPointerRef   = useRef({ x: 0, y: 0 });
+  // Stable refs to Three.js controls and renderer (updated each render cycle)
+  const controlsRef      = useRef<ThreeControls | null>(null);
+  const glDomRef         = useRef<HTMLCanvasElement | null>(null);
 
   // Phase-state refs
   const phaseRef         = useRef<Phase>('pilot');
@@ -489,6 +553,69 @@ export function QuaternionicModemDemo({
   const [effectiveQ, setEffectiveQ] = useState<Quat>([1, 0, 0, 0]);
   const [txPhase,    setTxPhase]    = useState<Phase>('pilot');
   const [stats,      setStats]      = useState<ModemStats>({ sent: 0, decoded: 0, unknowns: 0, errors: 0 });
+  /** Drives the HUD hint text between "DRAG TO ROTATE" and "ROTATING…". */
+  const [isDragging, setIsDragging] = useState(false);
+
+  // ── Access Three.js controls and renderer for drag interaction ────────────
+  const { controls, gl } = useThree();
+  // Keep refs in sync so window-level handlers always see the latest values.
+  controlsRef.current = controls as unknown as ThreeControls | null;
+  glDomRef.current    = gl.domElement;
+
+  // ── Pointer-down handler on the receiver — starts a drag rotation ─────────
+  function handlePointerDown(e: ThreeEvent<PointerEvent>) {
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    lastPointerRef.current = { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY };
+    e.stopPropagation();
+    if (controlsRef.current) controlsRef.current.enabled = false;
+    if (glDomRef.current) glDomRef.current.style.cursor = 'grabbing';
+  }
+
+  function handlePointerOver() {
+    if (glDomRef.current && !isDraggingRef.current) glDomRef.current.style.cursor = 'grab';
+  }
+
+  function handlePointerOut() {
+    if (glDomRef.current && !isDraggingRef.current) glDomRef.current.style.cursor = '';
+  }
+
+  // ── Window-level drag handlers (work even when pointer leaves the mesh) ───
+  useEffect(() => {
+    const handleMove = (e: PointerEvent) => {
+      if (!isDraggingRef.current) return;
+      const dx = e.clientX - lastPointerRef.current.x;
+      const dy = e.clientY - lastPointerRef.current.y;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      // Horizontal drag → yaw around world Y; vertical drag → pitch around world X.
+      const qDeltaYaw   = quatFromAxisAngle([0, 1, 0], dx * DRAG_SENSITIVITY);
+      const qDeltaPitch = quatFromAxisAngle([1, 0, 0], dy * DRAG_SENSITIVITY);
+      qReceiverRef.current = quatNormalize(
+        quatMultiply(quatMultiply(qDeltaYaw, qDeltaPitch), qReceiverRef.current),
+      );
+    };
+
+    const handleUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      setIsDragging(false);
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      if (glDomRef.current) glDomRef.current.style.cursor = 'grab';
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      // Re-enable controls if component unmounts mid-drag.
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        if (controlsRef.current) controlsRef.current.enabled = true;
+        if (glDomRef.current) glDomRef.current.style.cursor = '';
+      }
+    };
+  }, []); // window handlers run once; refs are used instead of closures over reactive values
 
   // ── Per-frame animation loop ──────────────────────────────────────────────
   useFrame((_, delta) => {
@@ -539,16 +666,8 @@ export function QuaternionicModemDemo({
       }
     }
 
-    // 2. Receiver quaternion — smooth multi-axis tumble, gimbal-lock free
-    yawRef.current += delta * YAW_RATE;
-    const yaw   = yawRef.current;
-    const pitch = Math.sin(yaw * 0.67) * 0.72;
-    const roll  = Math.cos(yaw * 0.43) * 0.48;
-
-    const qYaw   = quatFromAxisAngle([0, 1, 0], yaw);
-    const qPitch = quatFromAxisAngle([1, 0, 0], pitch);
-    const qRoll  = quatFromAxisAngle([0, 0, 1], roll);
-    qReceiverRef.current = quatNormalize(quatMultiply(quatMultiply(qYaw, qPitch), qRoll));
+    // 2. Receiver quaternion — controlled by user drag; no auto-rotation.
+    //    qReceiverRef.current is updated directly by the window pointermove handler.
 
     // 3. Channel quaternion — independent slow precession around a tilted axis
     //    Models channel-induced polarization rotation (e.g. waveguide birefringence).
@@ -682,6 +801,10 @@ export function QuaternionicModemDemo({
       {/* Three.js group.quaternion: [x, y, z, w]                                   */}
       <group quaternion={[qx, qy, qz, qw]}>
 
+        {/* Gyroscopic gimbal rings in the three principal planes of the receiver   */}
+        {/* frame.  They visually show that the modem can be oriented freely.       */}
+        <GimbalRings amplitude={amplitude} opacity={opacity} />
+
         {/* Gold dual-pole receiver body */}
         <ReceiverBody amplitude={amplitude} opacity={opacity} />
 
@@ -710,6 +833,17 @@ export function QuaternionicModemDemo({
             transparent
             opacity={Math.max(0.10, confidence) * opacity}
           />
+        </mesh>
+
+        {/* ── Invisible interaction sphere — captures pointer-down to start drag ─ */}
+        {/* Covers the receiver body so the user can click anywhere on the modem.  */}
+        <mesh
+          onPointerDown={handlePointerDown}
+          onPointerOver={handlePointerOver}
+          onPointerOut={handlePointerOut}
+        >
+          <sphereGeometry args={[amplitude * 0.65, 16, 16]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       </group>
 
@@ -749,6 +883,7 @@ export function QuaternionicModemDemo({
         phase={txPhase}
         stats={stats}
         jitterActive={jitterActive}
+        isDragging={isDragging}
       />
     </group>
   );
