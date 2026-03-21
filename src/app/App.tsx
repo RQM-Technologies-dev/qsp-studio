@@ -44,6 +44,10 @@ export default function App() {
   const [showModemMeasuredEllipse, setShowModemMeasuredEllipse] = useState(true);
   const [showModemRecoveredEllipse, setShowModemRecoveredEllipse] = useState(true);
   const [showModemHud,             setShowModemHud]             = useState(true);
+  // ── Advanced / Math overlays (off by default) ─────────────────────────────
+  const [showModemWorldEllipse,    setShowModemWorldEllipse]    = useState(false);
+  const [showModemReceiverAxes,    setShowModemReceiverAxes]    = useState(false);
+  const [showModemGhostTemplate,   setShowModemGhostTemplate]   = useState(false);
 
   // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
   const [receiverYaw,   setReceiverYaw]   = useState(0);
@@ -261,6 +265,9 @@ export default function App() {
           showModemMeasuredEllipse={showModemMeasuredEllipse}
           showModemRecoveredEllipse={showModemRecoveredEllipse}
           showModemHud={showModemHud}
+          showModemWorldEllipse={showModemWorldEllipse}
+          showModemReceiverAxes={showModemReceiverAxes}
+          showModemGhostTemplate={showModemGhostTemplate}
         />
         <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
@@ -290,6 +297,9 @@ export default function App() {
         showModemMeasuredEllipse={showModemMeasuredEllipse}
         showModemRecoveredEllipse={showModemRecoveredEllipse}
         showModemHud={showModemHud}
+        showModemWorldEllipse={showModemWorldEllipse}
+        showModemReceiverAxes={showModemReceiverAxes}
+        showModemGhostTemplate={showModemGhostTemplate}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
         onShowClassicalSplitChange={setShowClassicalSplit}
@@ -307,6 +317,9 @@ export default function App() {
         onShowModemMeasuredEllipseChange={setShowModemMeasuredEllipse}
         onShowModemRecoveredEllipseChange={setShowModemRecoveredEllipse}
         onShowModemHudChange={setShowModemHud}
+        onShowModemWorldEllipseChange={setShowModemWorldEllipse}
+        onShowModemReceiverAxesChange={setShowModemReceiverAxes}
+        onShowModemGhostTemplateChange={setShowModemGhostTemplate}
       />
     </div>
   );

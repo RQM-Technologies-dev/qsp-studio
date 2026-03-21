@@ -37,6 +37,10 @@ interface MainSceneProps {
   showModemMeasuredEllipse: boolean;
   showModemRecoveredEllipse: boolean;
   showModemHud: boolean;
+  // ── Advanced / Math overlays (off by default) ─────────────────────────────
+  showModemWorldEllipse: boolean;
+  showModemReceiverAxes: boolean;
+  showModemGhostTemplate: boolean;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
@@ -82,6 +86,7 @@ function SceneContent({
   couplingStrength, morphProgress, prevMode,
   showModemGimbalRings, showModemMeasuredEllipse,
   showModemRecoveredEllipse, showModemHud,
+  showModemWorldEllipse, showModemReceiverAxes, showModemGhostTemplate,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
   // coupling metric so the main geometry visibly weakens with misalignment.
@@ -216,6 +221,9 @@ function SceneContent({
           showMeasuredEllipse={showModemMeasuredEllipse}
           showRecoveredEllipse={showModemRecoveredEllipse}
           showHud={showModemHud}
+          showWorldEllipse={showModemWorldEllipse}
+          showReceiverAxes={showModemReceiverAxes}
+          showGhostTemplate={showModemGhostTemplate}
         />
       )}
 

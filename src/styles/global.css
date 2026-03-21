@@ -528,6 +528,56 @@ body {
   box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
 }
 
+/* ── Advanced / Math Layers toggle button ────────────────────────────────── */
+.modem-advanced-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.22rem 0.4rem;
+  background: transparent;
+  border: 1px dashed rgba(245, 158, 11, 0.30);
+  color: rgba(245, 158, 11, 0.55);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.modem-advanced-toggle:hover {
+  border-color: rgba(245, 158, 11, 0.65);
+  color: rgba(245, 158, 11, 0.85);
+}
+
+.modem-advanced-toggle.active {
+  border-color: rgba(245, 158, 11, 0.55);
+  color: rgba(245, 158, 11, 0.80);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+/* Advanced overlays grid — amber accent to distinguish from default layers */
+.modem-advanced-grid {
+  margin-top: 0.3rem;
+}
+
+.modem-advanced-grid .layer-grid-btn {
+  border-color: rgba(245, 158, 11, 0.25);
+  color: rgba(245, 158, 11, 0.55);
+}
+
+.modem-advanced-grid .layer-grid-btn:hover {
+  border-color: rgba(245, 158, 11, 0.70);
+  color: rgba(245, 158, 11, 0.90);
+}
+
+.modem-advanced-grid .layer-grid-btn.active {
+  border-color: rgba(245, 158, 11, 0.75);
+  color: rgba(245, 158, 11, 1.0);
+  background: rgba(245, 158, 11, 0.12);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
 /* Sweep indicator in status strip */
 .status-sweep {
   color: var(--amber);

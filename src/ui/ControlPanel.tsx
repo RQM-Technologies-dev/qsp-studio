@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { SignalParams, PolarizationMode, DemoMode } from '../math/signal';
 import { SweepMode } from './PresetBar';
 
@@ -21,6 +22,10 @@ interface ControlPanelProps {
   showModemMeasuredEllipse: boolean;
   showModemRecoveredEllipse: boolean;
   showModemHud: boolean;
+  // ── Advanced / Math overlays (off by default) ─────────────────────────────
+  showModemWorldEllipse: boolean;
+  showModemReceiverAxes: boolean;
+  showModemGhostTemplate: boolean;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
   onShowClassicalSplitChange: (v: boolean) => void;
@@ -38,6 +43,9 @@ interface ControlPanelProps {
   onShowModemMeasuredEllipseChange: (v: boolean) => void;
   onShowModemRecoveredEllipseChange: (v: boolean) => void;
   onShowModemHudChange: (v: boolean) => void;
+  onShowModemWorldEllipseChange: (v: boolean) => void;
+  onShowModemReceiverAxesChange: (v: boolean) => void;
+  onShowModemGhostTemplateChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -126,6 +134,9 @@ export function ControlPanel({
   showModemMeasuredEllipse,
   showModemRecoveredEllipse,
   showModemHud,
+  showModemWorldEllipse,
+  showModemReceiverAxes,
+  showModemGhostTemplate,
   onParamsChange,
   onAnimSpeedChange,
   onShowClassicalSplitChange,
@@ -140,9 +151,14 @@ export function ControlPanel({
   onShowModemMeasuredEllipseChange,
   onShowModemRecoveredEllipseChange,
   onShowModemHudChange,
+  onShowModemWorldEllipseChange,
+  onShowModemReceiverAxesChange,
+  onShowModemGhostTemplateChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
+  /** Local UI toggle — expand the Advanced / Math Layers sub-section. */
+  const [showAdvancedLayers, setShowAdvancedLayers] = useState(false);
 
   return (
     <div className="control-panel">
@@ -200,33 +216,66 @@ export function ControlPanel({
       <div className="control-section">
         <h4>Layers</h4>
         {params.demoMode === 'quaternionic' ? (
-          /* Modem-specific 4×2 grid — one button per visual component */
-          <div className="layers-grid">
-            <LayerGridBtn
-              label="Gimbal"
-              active={showModemGimbalRings}
-              onToggle={() => onShowModemGimbalRingsChange(!showModemGimbalRings)}
-              title="Show the three gyroscopic gimbal rings (YZ / XZ / XY planes)"
-            />
-            <LayerGridBtn
-              label="Measured"
-              active={showModemMeasuredEllipse}
-              onToggle={() => onShowModemMeasuredEllipseChange(!showModemMeasuredEllipse)}
-              title="Show the cyan measured ellipse (receiver-local projection of transmitted signal)"
-            />
-            <LayerGridBtn
-              label="Recovered"
-              active={showModemRecoveredEllipse}
-              onToggle={() => onShowModemRecoveredEllipseChange(!showModemRecoveredEllipse)}
-              title="Show the green recovered ellipse (symbol after inverse quaternion alignment)"
-            />
-            <LayerGridBtn
-              label="HUD"
-              active={showModemHud}
-              onToggle={() => onShowModemHudChange(!showModemHud)}
-              title="Show the compact modem readout / status HUD"
-            />
-          </div>
+          /* Modem-specific layout — default layers + collapsible advanced section */
+          <>
+            <div className="layers-grid">
+              <LayerGridBtn
+                label="Gimbal"
+                active={showModemGimbalRings}
+                onToggle={() => onShowModemGimbalRingsChange(!showModemGimbalRings)}
+                title="Show the three gyroscopic gimbal rings (YZ / XZ / XY planes)"
+              />
+              <LayerGridBtn
+                label="Measured"
+                active={showModemMeasuredEllipse}
+                onToggle={() => onShowModemMeasuredEllipseChange(!showModemMeasuredEllipse)}
+                title="Show the cyan measured ellipse (receiver-local projection of transmitted signal)"
+              />
+              <LayerGridBtn
+                label="Recovered"
+                active={showModemRecoveredEllipse}
+                onToggle={() => onShowModemRecoveredEllipseChange(!showModemRecoveredEllipse)}
+                title="Show the green recovered ellipse (symbol after inverse quaternion alignment)"
+              />
+              <LayerGridBtn
+                label="HUD"
+                active={showModemHud}
+                onToggle={() => onShowModemHudChange(!showModemHud)}
+                title="Show the compact modem readout / status HUD"
+              />
+            </div>
+
+            {/* ── Advanced / Math Layers — expert overlays ── */}
+            <button
+              className={`modem-advanced-toggle ${showAdvancedLayers ? 'active' : ''}`}
+              onClick={() => setShowAdvancedLayers(v => !v)}
+              title="Show additional mathematical truth layers for expert analysis"
+            >
+              {showAdvancedLayers ? '▾' : '▸'} Math Layers
+            </button>
+            {showAdvancedLayers && (
+              <div className="layers-grid modem-advanced-grid">
+                <LayerGridBtn
+                  label="TX Truth"
+                  active={showModemWorldEllipse}
+                  onToggle={() => onShowModemWorldEllipseChange(!showModemWorldEllipse)}
+                  title="Show the world-truth amber ellipse (transmitted polarization symbol, invariant under rotation)"
+                />
+                <LayerGridBtn
+                  label="RX Axes"
+                  active={showModemReceiverAxes}
+                  onToggle={() => onShowModemReceiverAxesChange(!showModemReceiverAxes)}
+                  title="Show the receiver sensing axes (r̂₁ amber I-ch, r̂₂ purple Q-ch, n̂ forward)"
+                />
+                <LayerGridBtn
+                  label="Ghost"
+                  active={showModemGhostTemplate}
+                  onToggle={() => onShowModemGhostTemplateChange(!showModemGhostTemplate)}
+                  title="Show the white canonical template ghost (ideal recovery target behind the recovered ellipse)"
+                />
+              </div>
+            )}
+          </>
         ) : (
           /* Non-modem modes: generic layer toggles in a 4×2 grid */
           <div className="layers-grid">
