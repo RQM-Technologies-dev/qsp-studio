@@ -48,6 +48,8 @@ export default function App() {
   const [showModemWorldEllipse,    setShowModemWorldEllipse]    = useState(false);
   const [showModemReceiverAxes,    setShowModemReceiverAxes]    = useState(false);
   const [showModemGhostTemplate,   setShowModemGhostTemplate]   = useState(false);
+  /** Geometry Decode mode — locks symbol, freezes channel, removes jitter/fade. */
+  const [showModemGeometryDecode,  setShowModemGeometryDecode]  = useState(false);
 
   // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
   const [receiverYaw,   setReceiverYaw]   = useState(0);
@@ -268,6 +270,7 @@ export default function App() {
           showModemWorldEllipse={showModemWorldEllipse}
           showModemReceiverAxes={showModemReceiverAxes}
           showModemGhostTemplate={showModemGhostTemplate}
+          showModemGeometryDecode={showModemGeometryDecode}
         />
         <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
@@ -300,6 +303,7 @@ export default function App() {
         showModemWorldEllipse={showModemWorldEllipse}
         showModemReceiverAxes={showModemReceiverAxes}
         showModemGhostTemplate={showModemGhostTemplate}
+        showModemGeometryDecode={showModemGeometryDecode}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
         onShowClassicalSplitChange={setShowClassicalSplit}
@@ -320,6 +324,7 @@ export default function App() {
         onShowModemWorldEllipseChange={setShowModemWorldEllipse}
         onShowModemReceiverAxesChange={setShowModemReceiverAxes}
         onShowModemGhostTemplateChange={setShowModemGhostTemplate}
+        onShowModemGeometryDecodeChange={setShowModemGeometryDecode}
       />
     </div>
   );

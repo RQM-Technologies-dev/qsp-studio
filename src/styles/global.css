@@ -1125,6 +1125,32 @@ body {
   text-align: right;
 }
 
+/* Geometry Decode badge — appears inline in the HUD title */
+.modem-hud-geodecode-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.3rem;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  border-radius: 3px;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #4ade80;
+  vertical-align: middle;
+}
+
+/* Geometry decode note — brief explanation of the three layers */
+.modem-hud-geodecode-note {
+  font-size: 0.58rem;
+  color: rgba(167, 139, 250, 0.80);
+  letter-spacing: 0.02em;
+  font-style: italic;
+  text-align: center;
+  margin: 0.1rem 0;
+  line-height: 1.35;
+}
+
 /* Drag-to-rotate interaction hint */
 .modem-hud-hint {
   font-size: 0.60rem;

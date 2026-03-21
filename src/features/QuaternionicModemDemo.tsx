@@ -67,6 +67,7 @@ import {
   quatFromAxisAngle,
   quatMultiply,
   quatNormalize,
+  rotateVec3ByQuat,
 } from '../math/quaternion';
 import {
   PolarizationSymbol,
@@ -280,6 +281,86 @@ function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: numb
   );
 }
 
+/**
+ * Quaternion bridge arc — geometry decode overlay.
+ *
+ * Draws a curved arc in world space from the canonical I-channel axis (ê_y)
+ * to the receiver I-channel axis (r̂₁ = R(q)·ê_y).  The arc traces the great
+ * circle swept by the quaternion rotation, making q visible as the thing
+ * being solved.  A small sphere at the arc midpoint marks the midpoint.
+ *
+ * This is the on-screen answer to: "what rotation takes canonical → receiver?"
+ */
+function QuaternionBridgeArrow({
+  effectiveQ,
+  amplitude,
+  opacity,
+}: {
+  effectiveQ: Quat;
+  amplitude: number;
+  opacity: number;
+}) {
+  const { r1 } = quaternionToBasis(effectiveQ);
+  const scale = amplitude * AXIS_SCALE * 0.78;
+  const N = 40;
+  const ey: Vec3 = [0, 1, 0];
+
+  // Rotation axis = cross(ê_y, r̂_1) — the axis around which ê_y must rotate to reach r̂_1.
+  // rotateVec3ByQuat then applies incremental rotations along this axis to sample arc points.
+  const axisRaw: Vec3 = [
+    ey[1] * r1[2] - ey[2] * r1[1],
+    ey[2] * r1[0] - ey[0] * r1[2],
+    ey[0] * r1[1] - ey[1] * r1[0],
+  ];
+  const axisLen = Math.sqrt(axisRaw[0] ** 2 + axisRaw[1] ** 2 + axisRaw[2] ** 2);
+
+  const arcPts: [number, number, number][] = [];
+
+  if (axisLen < 0.001) {
+    // ê_y and r̂_1 nearly parallel — straight segment at canonical axis
+    const p: [number, number, number] = [0, scale, 0];
+    for (let i = 0; i <= N; i++) arcPts.push(p);
+  } else {
+    const axis: Vec3 = [axisRaw[0] / axisLen, axisRaw[1] / axisLen, axisRaw[2] / axisLen];
+    const cosA = Math.max(-1, Math.min(1, ey[0] * r1[0] + ey[1] * r1[1] + ey[2] * r1[2]));
+    const angle = Math.acos(cosA);
+    for (let i = 0; i <= N; i++) {
+      const q = quatFromAxisAngle(axis, (i / N) * angle);
+      const p = rotateVec3ByQuat(ey, q);
+      arcPts.push([p[0] * scale, p[1] * scale, p[2] * scale]);
+    }
+  }
+
+  const midPt = arcPts[Math.floor(N / 2)];
+
+  return (
+    <group>
+      {/* Arc tracing the great-circle path of the quaternion rotation */}
+      <Line
+        points={arcPts}
+        color="#a78bfa"
+        lineWidth={1.8}
+        transparent
+        opacity={0.80 * opacity}
+        dashed
+        dashSize={0.055}
+        gapSize={0.035}
+      />
+      {/* Small sphere at arc midpoint — visual anchor for the "q" label shown in HUD */}
+      <mesh position={midPt}>
+        <sphereGeometry args={[DOT_RADIUS * 0.9, 6, 6]} />
+        <meshStandardMaterial
+          color="#a78bfa"
+          emissive="#a78bfa"
+          emissiveIntensity={2}
+          transparent
+          opacity={0.90 * opacity}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 // ── Helper: compute Symbol Error Rate % from modem stats ─────────────────────
 
 /**
@@ -304,6 +385,12 @@ function computeSER(stats: ModemStats): number | null {
  * Phase:
  *   PILOT — known calibration burst; receiver would estimate q_eff here
  *   DATA  — data symbol decoding using (known) q_eff
+ *
+ * Geometry Decode mode (geometryDecodeMode=true):
+ *   Simplified HUD — hides PILOT/DATA cycle and LINK STATS.
+ *   Shows TX symbol, confidence bar + percentage (projection quality indicator),
+ *   and drag hint.  Ellipse visual weights are fixed regardless of confidence
+ *   so the geometry stays clean and readable at all orientations.
  */
 function ModemHud({
   txSymbol,
@@ -317,6 +404,7 @@ function ModemHud({
   showWorldEllipse,
   showReceiverAxes,
   showGhostTemplate,
+  geometryDecodeMode,
 }: {
   txSymbol: PolarizationSymbol;
   rxSymbol: PolarizationSymbol;
@@ -329,6 +417,7 @@ function ModemHud({
   showWorldEllipse: boolean;
   showReceiverAxes: boolean;
   showGhostTemplate: boolean;
+  geometryDecodeMode: boolean;
 }) {
   const pct = Math.round(confidence * 100);
   const isUnknown = rxSymbol.name === 'UNKNOWN';
@@ -355,27 +444,40 @@ function ModemHud({
   return (
     <Html fullscreen zIndexRange={[10, 10]} style={{ pointerEvents: 'none' }}>
       <div className="modem-hud">
-        <div className="modem-hud-title">Quaternionic Modem</div>
+        {/* Title — shows GEO DECODE badge when in geometry decode mode */}
+        {geometryDecodeMode ? (
+          <div className="modem-hud-title">
+            Quaternionic Modem
+            <span className="modem-hud-geodecode-badge">GEO DECODE</span>
+          </div>
+        ) : (
+          <div className="modem-hud-title">Quaternionic Modem</div>
+        )}
 
-        {/* Phase indicator */}
-        <div className="modem-hud-row">
-          <span className="modem-hud-label">MODE</span>
-          <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : 'modem-hud-phase-data'}`}>
-            {phase === 'pilot' ? '\u25c6 PILOT' : '\u25b6 DATA'}
-          </span>
-        </div>
+        {/* Phase indicator — hidden in geometry decode mode (no cycling) */}
+        {!geometryDecodeMode && (
+          <div className="modem-hud-row">
+            <span className="modem-hud-label">MODE</span>
+            <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : 'modem-hud-phase-data'}`}>
+              {phase === 'pilot' ? '\u25c6 PILOT' : '\u25b6 DATA'}
+            </span>
+          </div>
+        )}
 
         <div className="modem-hud-row">
           <span className="modem-hud-label">TX</span>
           <span className="modem-hud-value modem-hud-tx">{txSymbol.name}</span>
         </div>
 
-        <div className="modem-hud-row">
-          <span className="modem-hud-label">RX</span>
-          <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : isUnknown ? 'modem-hud-lock-off' : match ? 'modem-hud-match' : 'modem-hud-mismatch'}`}>
-            {phase === 'pilot' ? 'CAL\u2026' : rxSymbol.name}
-          </span>
-        </div>
+        {/* RX decoded symbol — hidden in geometry decode mode (not a comms test) */}
+        {!geometryDecodeMode && (
+          <div className="modem-hud-row">
+            <span className="modem-hud-label">RX</span>
+            <span className={`modem-hud-value ${phase === 'pilot' ? 'modem-hud-phase-pilot' : isUnknown ? 'modem-hud-lock-off' : match ? 'modem-hud-match' : 'modem-hud-mismatch'}`}>
+              {phase === 'pilot' ? 'CAL\u2026' : rxSymbol.name}
+            </span>
+          </div>
+        )}
 
         <div className="modem-hud-row">
           <span className="modem-hud-label">LOCK</span>
@@ -404,30 +506,44 @@ function ModemHud({
           <span style={{ left: `${Math.round(CONF_LOCKED * 100)}%` }} />
         </div>
 
-        {/* Jitter warning — shown when recovery is unstable due to low energy */}
-        {jitterActive && (
+        {/* Jitter warning — only shown in normal modem mode */}
+        {!geometryDecodeMode && jitterActive && (
           <div className="modem-hud-unstable">
             &#9888; REC UNSTABLE
           </div>
         )}
 
-        {/* ── Modem stats (data symbols only; pilot excluded) ── */}
-        <div className="modem-hud-divider" />
-        <div className="modem-hud-stats-title">LINK STATS</div>
-        <div className="modem-hud-stats-grid">
-          <span className="modem-hud-label">TX</span>
-          <span className="modem-hud-value">{stats.sent}</span>
-          <span className="modem-hud-label">OK</span>
-          <span className="modem-hud-value modem-hud-match">{stats.decoded}</span>
-          <span className="modem-hud-label">ERR</span>
-          <span className="modem-hud-value modem-hud-mismatch">{stats.errors}</span>
-          <span className="modem-hud-label">UNK</span>
-          <span className="modem-hud-value modem-hud-lock-off">{stats.unknowns}</span>
-          <span className="modem-hud-label">SER</span>
-          <span className="modem-hud-value" style={{ color: serColor }}>
-            {ser !== null ? `${ser}%` : '\u2014'}
-          </span>
-        </div>
+        {/* Geometry decode: brief explanation of what to observe */}
+        {geometryDecodeMode && (
+          <>
+            <div className="modem-hud-divider" />
+            <div className="modem-hud-geodecode-note">
+              Amber = TX truth · Cyan = measured · Green = q⁻¹(cyan)
+            </div>
+          </>
+        )}
+
+        {/* ── Modem stats (data symbols only; hidden in geometry decode mode) ── */}
+        {!geometryDecodeMode && (
+          <>
+            <div className="modem-hud-divider" />
+            <div className="modem-hud-stats-title">LINK STATS</div>
+            <div className="modem-hud-stats-grid">
+              <span className="modem-hud-label">TX</span>
+              <span className="modem-hud-value">{stats.sent}</span>
+              <span className="modem-hud-label">OK</span>
+              <span className="modem-hud-value modem-hud-match">{stats.decoded}</span>
+              <span className="modem-hud-label">ERR</span>
+              <span className="modem-hud-value modem-hud-mismatch">{stats.errors}</span>
+              <span className="modem-hud-label">UNK</span>
+              <span className="modem-hud-value modem-hud-lock-off">{stats.unknowns}</span>
+              <span className="modem-hud-label">SER</span>
+              <span className="modem-hud-value" style={{ color: serColor }}>
+                {ser !== null ? `${ser}%` : '\u2014'}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* Legend */}
         <div className="modem-hud-divider" />
@@ -441,6 +557,7 @@ function ModemHud({
           {showWorldEllipse && (<><span className="modem-hud-dot" style={{ background: '#f59e0b', opacity: 0.7 }} /><span>TX truth</span></>)}
           {showGhostTemplate && (<><span className="modem-hud-dot" style={{ background: '#e2e8f0', opacity: 0.6 }} /><span>Ghost</span></>)}
           {showReceiverAxes && (<><span className="modem-hud-dot" style={{ background: '#8b5cf6' }} /><span>RX axes</span></>)}
+          {geometryDecodeMode && (<><span className="modem-hud-dot" style={{ background: '#a78bfa' }} /><span>q arc</span></>)}
         </div>
 
         {/* Drag-to-rotate hint */}
@@ -509,6 +626,20 @@ export interface QuaternionicModemDemoProps {
   showReceiverAxes?: boolean;
   /** Show the white canonical template ghost (ideal recovery target). */
   showGhostTemplate?: boolean;
+  /**
+   * Geometry Decode mode — isolates the quaternion geometry from channel effects:
+   *   • TX symbol locked (no PILOT/DATA cycling)
+   *   • Channel drift frozen (q_channel = identity; only user drag changes q_eff)
+   *   • Jitter disabled (estimation fragility hidden)
+   *   • Ellipse visual weight fixed (no confidence-driven collapse)
+   *   • TX Truth and RX Axes forced visible
+   *   • Quaternion bridge arc shown (great-circle arc ê_y → r̂₁ labeled "q")
+   *   • HUD simplified (CONF as number; no LINK STATS)
+   *
+   * Goal: user watches cyan tumble and green snap back to amber as they drag.
+   * That is the geometric "decode" in one sentence.
+   */
+  geometryDecodeMode?: boolean;
 }
 
 /**
@@ -532,6 +663,7 @@ export function QuaternionicModemDemo({
   showWorldEllipse = false,
   showReceiverAxes = false,
   showGhostTemplate = false,
+  geometryDecodeMode = false,
 }: QuaternionicModemDemoProps) {
   const { amplitude, frequency, phase: signalPhase } = params;
 
@@ -637,61 +769,70 @@ export function QuaternionicModemDemo({
   // ── Per-frame animation loop ──────────────────────────────────────────────
   useFrame((_, delta) => {
     // 1. Symbol / phase stream
-    symbolTimerRef.current += delta;
-    const dwellTime = phaseRef.current === 'pilot' ? PILOT_DWELL : SYMBOL_DWELL;
+    //    In geometry decode mode the TX symbol is locked to PILOT_SYMBOL_IDX (LIN_Y)
+    //    — no cycling, no PILOT/DATA alternation.
+    if (!geometryDecodeMode) {
+      symbolTimerRef.current += delta;
+      const dwellTime = phaseRef.current === 'pilot' ? PILOT_DWELL : SYMBOL_DWELL;
 
-    if (symbolTimerRef.current >= dwellTime) {
-      symbolTimerRef.current -= dwellTime;
+      if (symbolTimerRef.current >= dwellTime) {
+        symbolTimerRef.current -= dwellTime;
 
-      if (phaseRef.current === 'pilot') {
-        // Pilot burst complete → begin data phase
-        phaseRef.current = 'data';
-        dataCountRef.current = 0;
-        symbolIdxRef.current = nextDataIdxRef.current;
-        setTxPhase('data');
-        setTxSymbol(MODEM_SYMBOLS[nextDataIdxRef.current]);
-      } else {
-        // Data symbol complete — count stats before advancing
-        const tx = MODEM_SYMBOLS[symbolIdxRef.current];
-        const rx = lastRxRef.current;
-        statsRef.current.sent++;
-        if (rx.name === 'UNKNOWN') {
-          statsRef.current.unknowns++;
-        } else if (rx.name !== tx.name) {
-          statsRef.current.errors++;
-        } else {
-          statsRef.current.decoded++;
-        }
-
-        // Advance to next data symbol or return to pilot
-        nextDataIdxRef.current = (nextDataIdxRef.current + 1) % MODEM_SYMBOLS.length;
-        dataCountRef.current++;
-
-        if (dataCountRef.current >= DATA_PER_PILOT) {
-          // Data phase complete → return to pilot burst
-          phaseRef.current = 'pilot';
-          symbolIdxRef.current = PILOT_SYMBOL_IDX;
-          setTxPhase('pilot');
-          setTxSymbol(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
-        } else {
-          // Next data symbol
+        if (phaseRef.current === 'pilot') {
+          // Pilot burst complete → begin data phase
+          phaseRef.current = 'data';
+          dataCountRef.current = 0;
           symbolIdxRef.current = nextDataIdxRef.current;
+          setTxPhase('data');
           setTxSymbol(MODEM_SYMBOLS[nextDataIdxRef.current]);
-        }
+        } else {
+          // Data symbol complete — count stats before advancing
+          const tx = MODEM_SYMBOLS[symbolIdxRef.current];
+          const rx = lastRxRef.current;
+          statsRef.current.sent++;
+          if (rx.name === 'UNKNOWN') {
+            statsRef.current.unknowns++;
+          } else if (rx.name !== tx.name) {
+            statsRef.current.errors++;
+          } else {
+            statsRef.current.decoded++;
+          }
 
-        setStats({ ...statsRef.current });
+          // Advance to next data symbol or return to pilot
+          nextDataIdxRef.current = (nextDataIdxRef.current + 1) % MODEM_SYMBOLS.length;
+          dataCountRef.current++;
+
+          if (dataCountRef.current >= DATA_PER_PILOT) {
+            // Data phase complete → return to pilot burst
+            phaseRef.current = 'pilot';
+            symbolIdxRef.current = PILOT_SYMBOL_IDX;
+            setTxPhase('pilot');
+            setTxSymbol(MODEM_SYMBOLS[PILOT_SYMBOL_IDX]);
+          } else {
+            // Next data symbol
+            symbolIdxRef.current = nextDataIdxRef.current;
+            setTxSymbol(MODEM_SYMBOLS[nextDataIdxRef.current]);
+          }
+
+          setStats({ ...statsRef.current });
+        }
       }
     }
 
     // 2. Receiver quaternion — controlled by user drag; no auto-rotation.
     //    qReceiverRef.current is updated directly by the window pointermove handler.
 
-    // 3. Channel quaternion — independent slow precession around a tilted axis
-    //    Models channel-induced polarization rotation (e.g. waveguide birefringence).
-    channelAngleRef.current += delta * CHANNEL_RATE;
-    qChannelRef.current = quatNormalize(
-      quatFromAxisAngle(CHANNEL_AXIS, channelAngleRef.current),
-    );
+    // 3. Channel quaternion — independent slow precession around a tilted axis.
+    //    In geometry decode mode the channel is frozen at identity so the user
+    //    sees only their drag rotation (q_eff = q_receiver exactly).
+    if (!geometryDecodeMode) {
+      channelAngleRef.current += delta * CHANNEL_RATE;
+      qChannelRef.current = quatNormalize(
+        quatFromAxisAngle(CHANNEL_AXIS, channelAngleRef.current),
+      );
+    } else {
+      qChannelRef.current = [1, 0, 0, 0];
+    }
 
     // 4. Effective quaternion: q_eff = q_channel × q_receiver
     //    Recovery inverts q_eff using PERFECT KNOWLEDGE (v1 demo — not estimated).
@@ -727,8 +868,12 @@ export function QuaternionicModemDemo({
   const sym = txSymbol;
   const { r1, r2 } = quaternionToBasis(effectiveQ);
 
+  // In geometry decode mode: TX Truth and RX Axes are always shown (independent of props).
+  const actualShowWorldEllipse  = geometryDecodeMode || showWorldEllipse;
+  const actualShowReceiverAxes  = geometryDecodeMode || showReceiverAxes;
+
   // World truth ellipse — fixed in the world YZ-plane (used by advanced overlays)
-  const worldPts = (showWorldEllipse || showGhostTemplate)
+  const worldPts = (actualShowWorldEllipse || showGhostTemplate)
     ? sampleWorldEllipse(ELLIPSE_N, sym.Ay * amplitude, sym.Az * amplitude, sym.delta)
         .map(p => p as [number, number, number])
     : [];
@@ -747,7 +892,8 @@ export function QuaternionicModemDemo({
 
   // Jitter fraction: 0 when confidence ≥ CONF_WEAK, increases below CONF_WEAK.
   // Represents estimation fragility, not physical wave instability.
-  const jitterFrac = confidence < CONF_WEAK
+  // In geometry decode mode jitter is always 0 — we show geometry, not channel effects.
+  const jitterFrac = (!geometryDecodeMode && confidence < CONF_WEAK)
     ? Math.min(1, (CONF_WEAK - confidence) / CONF_WEAK)
     : 0;
   const jitterActive = jitterFrac > 0.001;
@@ -761,18 +907,21 @@ export function QuaternionicModemDemo({
   const { v1, v2, E_proj_world } = projectFieldToReceiver(worldDot, r1, r2);
   const recDot = recoverToCanonical(E_proj_world, effectiveQ) as [number, number, number];
 
-  // Apply same jitter to live dot when confidence is low (estimation fragility)
+  // Apply same jitter to live dot when confidence is low (estimation fragility).
+  // Disabled in geometry decode mode.
   const recDotJittered: [number, number, number] = jitterActive ? [
     recDot[0],
     recDot[1] + jitterFrac * JITTER_AMP_SCALE * amplitude * Math.sin(currentTime * 11.3 + 99),
     recDot[2] + jitterFrac * JITTER_AMP_SCALE * amplitude * Math.cos(currentTime * 8.7  + 33),
   ] : recDot;
 
-  // Confidence-driven visual weight for measured and recovered ellipses
-  const measWidth   = 0.8 + 2.2 * confidence;
-  const measOpacity = (0.25 + 0.75 * confidence) * opacity;
-  const recWidth    = 0.8 + 2.0 * confidence;
-  const recOpacity  = (0.12 + 0.88 * confidence) * opacity;
+  // Visual weight for measured and recovered ellipses.
+  // In geometry decode mode: fixed weights — confidence does NOT collapse the ellipses.
+  // "Data loss can be seen in numbers" (CONF display) but the geometry stays clean.
+  const measWidth   = geometryDecodeMode ? 2.2 : (0.8 + 2.2 * confidence);
+  const measOpacity = geometryDecodeMode ? (0.85 * opacity) : ((0.25 + 0.75 * confidence) * opacity);
+  const recWidth    = geometryDecodeMode ? 2.2 : (0.8 + 2.0 * confidence);
+  const recOpacity  = geometryDecodeMode ? (0.90 * opacity) : ((0.12 + 0.88 * confidence) * opacity);
 
   // Convert effective quaternion [w, x, y, z] → Three.js group quaternion [x, y, z, w]
   const [qw, qx, qy, qz] = effectiveQ;
@@ -781,18 +930,18 @@ export function QuaternionicModemDemo({
     <group>
       {/* ── Advanced: World truth ellipse (amber) — invariant polarization symbol ── */}
       {/* Fixed in the world YZ-plane; does NOT rotate with receiver or channel.      */}
-      {showWorldEllipse && worldPts.length >= 2 && (
+      {actualShowWorldEllipse && worldPts.length >= 2 && (
         <Line
           points={worldPts}
           color="#f59e0b"
-          lineWidth={2.2}
+          lineWidth={geometryDecodeMode ? 2.8 : 2.2}
           transparent
-          opacity={0.70 * opacity}
+          opacity={(geometryDecodeMode ? 0.85 : 0.70) * opacity}
         />
       )}
 
       {/* Live amber dot — tracks wave front at the current carrier phase */}
-      {showWorldEllipse && (
+      {actualShowWorldEllipse && (
         <mesh position={worldDot}>
           <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
           <meshStandardMaterial
@@ -827,7 +976,7 @@ export function QuaternionicModemDemo({
         {showGimbalRings && <GimbalRings amplitude={amplitude} opacity={opacity} />}
 
         {/* Advanced: sensing axes (r1 amber I-ch, r2 purple Q-ch, n forward) */}
-        {showReceiverAxes && <ReceiverAxes amplitude={amplitude} opacity={opacity} />}
+        {actualShowReceiverAxes && <ReceiverAxes amplitude={amplitude} opacity={opacity} />}
 
         {/* Cyan measured ellipse — drawn as [0, v1, v2] in local frame.         */}
         {/* The rotation group maps this to v1·r1 + v2·r2 in world space.        */}
@@ -850,7 +999,7 @@ export function QuaternionicModemDemo({
               emissive="#00d4ff"
               emissiveIntensity={2}
               transparent
-              opacity={Math.max(0.10, confidence) * opacity}
+              opacity={(geometryDecodeMode ? Math.max(0.60, confidence) : Math.max(0.10, confidence)) * opacity}
             />
           </mesh>
         )}
@@ -869,9 +1018,8 @@ export function QuaternionicModemDemo({
 
       {/* ── 2. Recovered ellipse (green) — canonical world YZ-plane ─────────── */}
       {/* R(q_eff)^{-1} · E_proj_world — matches gimbal reception plane when      */}
-      {/* lock is good.  Fades + jitters when confidence is low (estimation       */}
-      {/* fragility, not physical wave noise).  The amplitude also collapses with */}
-      {/* projection energy loss — both effects are honest physics.               */}
+      {/* lock is good.  In normal mode: fades + jitters when confidence is low.  */}
+      {/* In geometry decode mode: weight is fixed so the shape stays visible.    */}
       {showRecoveredEllipse && recoveredPts.length >= 2 && (
         <Line
           points={recoveredPts}
@@ -891,9 +1039,20 @@ export function QuaternionicModemDemo({
             emissive="#4ade80"
             emissiveIntensity={2.5}
             transparent
-            opacity={Math.max(0.08, confidence) * opacity}
+            opacity={(geometryDecodeMode ? Math.max(0.60, confidence) : Math.max(0.08, confidence)) * opacity}
           />
         </mesh>
+      )}
+
+      {/* ── Geometry Decode: quaternion bridge arc ─────────────────────────────── */}
+      {/* Great-circle arc in world space from canonical ê_y → receiver r̂₁,       */}
+      {/* labeled "q".  Makes the quaternion rotation visible as the thing solved.  */}
+      {geometryDecodeMode && (
+        <QuaternionBridgeArrow
+          effectiveQ={effectiveQ}
+          amplitude={amplitude}
+          opacity={opacity}
+        />
       )}
 
       {/* ── 5. Compact modem HUD overlay ─────────────────────────────────────── */}
@@ -907,9 +1066,10 @@ export function QuaternionicModemDemo({
           stats={stats}
           jitterActive={jitterActive}
           isDragging={isDragging}
-          showWorldEllipse={showWorldEllipse}
-          showReceiverAxes={showReceiverAxes}
+          showWorldEllipse={actualShowWorldEllipse}
+          showReceiverAxes={actualShowReceiverAxes}
           showGhostTemplate={showGhostTemplate}
+          geometryDecodeMode={geometryDecodeMode}
         />
       )}
     </group>

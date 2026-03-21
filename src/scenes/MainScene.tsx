@@ -41,6 +41,7 @@ interface MainSceneProps {
   showModemWorldEllipse: boolean;
   showModemReceiverAxes: boolean;
   showModemGhostTemplate: boolean;
+  showModemGeometryDecode: boolean;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
@@ -87,6 +88,7 @@ function SceneContent({
   showModemGimbalRings, showModemMeasuredEllipse,
   showModemRecoveredEllipse, showModemHud,
   showModemWorldEllipse, showModemReceiverAxes, showModemGhostTemplate,
+  showModemGeometryDecode,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
   // coupling metric so the main geometry visibly weakens with misalignment.
@@ -224,6 +226,7 @@ function SceneContent({
           showWorldEllipse={showModemWorldEllipse}
           showReceiverAxes={showModemReceiverAxes}
           showGhostTemplate={showModemGhostTemplate}
+          geometryDecodeMode={showModemGeometryDecode}
         />
       )}
 

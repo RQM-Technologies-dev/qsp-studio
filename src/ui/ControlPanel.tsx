@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SignalParams, PolarizationMode, DemoMode } from '../math/signal';
 import { SweepMode } from './PresetBar';
 
@@ -26,6 +26,7 @@ interface ControlPanelProps {
   showModemWorldEllipse: boolean;
   showModemReceiverAxes: boolean;
   showModemGhostTemplate: boolean;
+  showModemGeometryDecode: boolean;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
   onShowClassicalSplitChange: (v: boolean) => void;
@@ -46,6 +47,7 @@ interface ControlPanelProps {
   onShowModemWorldEllipseChange: (v: boolean) => void;
   onShowModemReceiverAxesChange: (v: boolean) => void;
   onShowModemGhostTemplateChange: (v: boolean) => void;
+  onShowModemGeometryDecodeChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -137,6 +139,7 @@ export function ControlPanel({
   showModemWorldEllipse,
   showModemReceiverAxes,
   showModemGhostTemplate,
+  showModemGeometryDecode,
   onParamsChange,
   onAnimSpeedChange,
   onShowClassicalSplitChange,
@@ -154,11 +157,16 @@ export function ControlPanel({
   onShowModemWorldEllipseChange,
   onShowModemReceiverAxesChange,
   onShowModemGhostTemplateChange,
+  onShowModemGeometryDecodeChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
-  /** Local UI toggle — expand the Advanced / Math Layers sub-section. */
+  /** Local UI toggle — expand the Advanced / Math Layers sub-section.
+   *  Auto-opens when Geometry Decode mode is activated so the button is always visible. */
   const [showAdvancedLayers, setShowAdvancedLayers] = useState(false);
+  useEffect(() => {
+    if (showModemGeometryDecode) setShowAdvancedLayers(true);
+  }, [showModemGeometryDecode]);
 
   return (
     <div className="control-panel">
@@ -272,6 +280,12 @@ export function ControlPanel({
                   active={showModemGhostTemplate}
                   onToggle={() => onShowModemGhostTemplateChange(!showModemGhostTemplate)}
                   title="Show the white canonical template ghost (ideal recovery target behind the recovered ellipse)"
+                />
+                <LayerGridBtn
+                  label="Geo Decode"
+                  active={showModemGeometryDecode}
+                  onToggle={() => onShowModemGeometryDecodeChange(!showModemGeometryDecode)}
+                  title="Geometry Decode mode: lock TX symbol, freeze channel drift, remove jitter/fade, show quaternion bridge arc. Green should match amber — that is the geometric decode."
                 />
               </div>
             )}
