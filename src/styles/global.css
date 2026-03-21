@@ -847,3 +847,107 @@ body {
      CSS size is identical so there's no HiDPI scaling here — sharp on any
      screen density because the canvas itself is drawn at layout size. */
 }
+
+/* ── Quaternionic Modem HUD ──────────────────────────────────────────────────
+   Compact status overlay injected via drei Html into the 3D Canvas.
+   Positioned at the bottom-right of the scene wrapper.                        */
+
+.modem-hud {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 1.2rem;
+  width: 11rem;
+  background: rgba(10, 10, 20, 0.82);
+  border: 1px solid rgba(0, 212, 255, 0.20);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.modem-hud-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+  padding-bottom: 0.25rem;
+}
+
+.modem-hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.22rem;
+}
+
+.modem-hud-label {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.modem-hud-value {
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.modem-hud-tx {
+  color: #f59e0b;
+}
+
+.modem-hud-match {
+  color: #4ade80;
+}
+
+.modem-hud-mismatch {
+  color: #f87171;
+}
+
+.modem-hud-lock-on {
+  color: #4ade80;
+}
+
+.modem-hud-lock-off {
+  color: #f87171;
+}
+
+.modem-hud-bar-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  margin: 0.35rem 0 0.4rem;
+  overflow: hidden;
+}
+
+.modem-hud-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.2s ease, background 0.3s ease;
+}
+
+.modem-hud-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.60rem;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+}
+
+.modem-hud-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
