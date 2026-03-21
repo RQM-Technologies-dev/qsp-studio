@@ -7,6 +7,7 @@ import { SignalVector } from '../components/SignalVector';
 import { TrailPath } from '../components/TrailPath';
 import { generateTrail } from '../math/polarization';
 import { quatFromAxisAngle, rotateVec3ByQuat, Vec3 } from '../math/quaternion';
+import { computeReceiverBasis } from '../math/receiverBasis';
 interface QuaternionicSignalDemoProps {
   params: SignalParams;
   currentTime: number;
@@ -46,6 +47,192 @@ interface QuaternionicSignalDemoProps {
    * boundary surface — shows the receiver manifold actively excited by the field.
    */
   showExcitation?: boolean;
+}
+
+/** Number of parametric sample points for the world and local-measurement ellipses. */
+const ELLIPSE_RESOLUTION = 80;
+
+/** Scale factor applied to signal amplitude to set the receiver-axis arrow length. */
+const RECEIVER_AXIS_SCALE = 1.15;
+
+/** Opacity of the n̂ (propagation-normal) receiver axis — subtler than the sensing axes. */
+const RECEIVER_NORMAL_OPACITY = 0.40;
+
+/** Line width of the n̂ receiver axis (thinner than the I/Q sensing axes). */
+const RECEIVER_NORMAL_LINE_WIDTH = 1.4;
+
+/** Radius of the live-measurement dot sphere (in scene units). */
+const MEASUREMENT_DOT_RADIUS = 0.042;
+
+/**
+ * Minimum coupling-strength contribution to the measurement-ellipse visibility floor.
+ * At 0.3 the coupling term can contribute at most 0.3 to strengthFactor, keeping the
+ * ellipse barely visible at extreme misalignment so the receiver frame is still legible,
+ * without overriding the physically accurate projStrength signal at normal orientations.
+ */
+const COUPLING_STRENGTH_FLOOR_WEIGHT = 0.3;
+
+/**
+ * E-field vector in world space for the EM plane wave propagating along +X.
+ * The transverse field lives in the YZ plane:
+ *   E(t) = [0, Ay·cos(θ), Az·cos(θ + δ)]
+ * where θ = 2π·f·t + φ.  Az and δ depend on the polarization mode.
+ */
+function eFieldAt(params: SignalParams, t: number): [number, number, number] {
+  const { amplitude, frequency, phase, polarization, ellipticity } = params;
+  const theta = 2 * Math.PI * frequency * t + phase;
+  const Ay = amplitude;
+  let Az = amplitude;
+  let delta = Math.PI / 2; // default: circular
+  if (polarization === 'linear') { Az = 0; delta = 0; }
+  else if (polarization === 'elliptical') { Az = amplitude * ellipticity; delta = Math.PI / 2; }
+  return [0, Ay * Math.cos(theta), Az * Math.cos(theta + delta)];
+}
+
+/**
+ * True EM wave polarization ellipse fixed in the world YZ plane.
+ * Represents the ground-truth wave that is invariant under receiver rotation.
+ */
+function WorldEllipse({ params, opacity }: { params: SignalParams; opacity: number }) {
+  const { amplitude, polarization, ellipticity } = params;
+  const pts = useMemo<[number, number, number][]>(() => {
+    const Ay = amplitude;
+    let Az = amplitude;
+    let delta = Math.PI / 2;
+    if (polarization === 'linear') { Az = 0; delta = 0; }
+    else if (polarization === 'elliptical') { Az = amplitude * ellipticity; delta = Math.PI / 2; }
+    const result: [number, number, number][] = [];
+    for (let i = 0; i <= ELLIPSE_RESOLUTION; i++) {
+      const theta = (i / ELLIPSE_RESOLUTION) * 2 * Math.PI;
+      result.push([0, Ay * Math.cos(theta), Az * Math.cos(theta + delta)]);
+    }
+    return result;
+  }, [amplitude, polarization, ellipticity]);
+
+  if (pts.length < 2) return null;
+  return (
+    <Line points={pts} color="#f59e0b" lineWidth={1.2} transparent opacity={0.30 * opacity} />
+  );
+}
+
+/**
+ * Complete SO(3) orthonormal receiver frame drawn in the receiver's local space.
+ *
+ *  r̂₁ = R(q)·ê_y  — I-channel sensing axis  (amber,  bright)
+ *  r̂₂ = R(q)·ê_z  — Q-channel sensing axis  (purple, bright)
+ *  n̂  = R(q)·ê_x  — normal / propagation axis (green,  dim)
+ *
+ * Together (r̂₁, r̂₂, n̂) form the SO(3) image of the receiver quaternion q.
+ * Since these live inside the rotation group they are automatically transformed
+ * to the correct world-space directions by the parent Three.js group.
+ */
+function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: number }) {
+  const AX = amplitude * RECEIVER_AXIS_SCALE;
+  const r1pts: [number, number, number][] = [[0, 0, 0], [0, AX, 0]];
+  const r2pts: [number, number, number][] = [[0, 0, 0], [0, 0, AX]];
+  const npts:  [number, number, number][] = [[0, 0, 0], [AX, 0, 0]];
+  return (
+    <group>
+      {/* r̂₁ = R(q)·ê_y — I-channel */}
+      <Line points={r1pts} color="#f59e0b" lineWidth={2.2} transparent opacity={0.80 * opacity} />
+      {/* r̂₂ = R(q)·ê_z — Q-channel */}
+      <Line points={r2pts} color="#8b5cf6" lineWidth={2.2} transparent opacity={0.80 * opacity} />
+      {/* n̂ = R(q)·ê_x — propagation-normal axis; completes the SO(3) receiver triad */}
+      <Line points={npts}  color="#55ee88" lineWidth={RECEIVER_NORMAL_LINE_WIDTH} transparent opacity={RECEIVER_NORMAL_OPACITY * opacity} />
+    </group>
+  );
+}
+
+/**
+ * Local measurement ellipse drawn in the receiver's local YZ plane.
+ *
+ * Each point is [0, v₁(θ), v₂(θ)] where:
+ *   v₁ = E_world · r̂₁   (I-channel projection)
+ *   v₂ = E_world · r̂₂   (Q-channel projection)
+ *
+ * Because this element lives inside the receiver rotation group, the Three.js
+ * transform R(q) is automatically applied.  In world space each point becomes
+ * v₁·r̂₁ + v₂·r̂₂, which is the projection of E onto the receiver plane.
+ *
+ * Signal strength (‖E_proj‖) drives visual intensity:
+ *  • Aligned receiver  → projStrength ≈ 1 → bright, thick cyan ellipse
+ *  • Tilted receiver   → projStrength < 1 → ellipse compresses and dims
+ *  • Orthogonal receiver → projStrength ≈ 0 → ellipse collapses, nearly invisible
+ */
+function LocalMeasurementEllipse({
+  params, receiverYaw, receiverPitch, currentTime, couplingStrength, opacity,
+}: {
+  params: SignalParams;
+  receiverYaw: number;
+  receiverPitch: number;
+  currentTime: number;
+  couplingStrength: number;
+  opacity: number;
+}) {
+  const { amplitude, polarization, ellipticity } = params;
+
+  // Compute the projected ellipse points AND the peak projection strength in one pass.
+  // projStrength = max_θ(‖E_proj(θ)‖) / amplitude ∈ [0,1].
+  // This is the physically exact signal intensity — bright when aligned, dark when orthogonal.
+  const { ellipsePts, projStrength } = useMemo(() => {
+    const { jAxis, kAxis } = computeReceiverBasis(receiverYaw, receiverPitch);
+    const Ay = amplitude;
+    let Az = amplitude;
+    let delta = Math.PI / 2;
+    if (polarization === 'linear') { Az = 0; delta = 0; }
+    else if (polarization === 'elliptical') { Az = amplitude * ellipticity; delta = Math.PI / 2; }
+    const result: [number, number, number][] = [];
+    let maxProjSq = 0;
+    for (let i = 0; i <= ELLIPSE_RESOLUTION; i++) {
+      const theta = (i / ELLIPSE_RESOLUTION) * 2 * Math.PI;
+      const ey = Ay * Math.cos(theta);
+      const ez = Az * Math.cos(theta + delta);
+      const v1 = ey * jAxis[1] + ez * jAxis[2];
+      const v2 = ey * kAxis[1] + ez * kAxis[2];
+      const projSq = v1 * v1 + v2 * v2;
+      if (projSq > maxProjSq) maxProjSq = projSq;
+      result.push([0, v1, v2]);
+    }
+    // Normalize: world peak = amplitude (true for all polarization modes)
+    const strength = amplitude > 0 ? Math.min(1, Math.sqrt(maxProjSq) / amplitude) : 0;
+    return { ellipsePts: result, projStrength: strength };
+  }, [amplitude, polarization, ellipticity, receiverYaw, receiverPitch]);
+
+  // Current live measurement dot
+  const basis = computeReceiverBasis(receiverYaw, receiverPitch);
+  const { jAxis, kAxis } = basis;
+  const [, ey0, ez0] = eFieldAt(params, currentTime);
+  const v1Now = ey0 * jAxis[1] + ez0 * jAxis[2];
+  const v2Now = ey0 * kAxis[1] + ez0 * kAxis[2];
+  const dotPos: [number, number, number] = [0, v1Now, v2Now];
+
+  if (ellipsePts.length < 2) return null;
+
+  // Color intensity driven by projStrength: bright = strong alignment, dim = poor alignment.
+  // couplingStrength provides a secondary visibility floor (weighted by COUPLING_STRENGTH_FLOOR_WEIGHT)
+  // so the ellipse outline stays barely legible at extreme misalignment.
+  const strengthFactor = Math.max(projStrength, couplingStrength * COUPLING_STRENGTH_FLOOR_WEIGHT);
+  const ellipseOpacity = (0.15 + 0.85 * strengthFactor) * opacity;
+  const ellipseLineWidth = 0.5 + 2.0 * projStrength;
+  const dotOpacity = (0.3 + 0.7 * strengthFactor) * opacity;
+
+  return (
+    <group>
+      {/* Measurement ellipse — width and brightness encode ‖E_proj‖ / amplitude */}
+      <Line points={ellipsePts} color="#00d4ff" lineWidth={ellipseLineWidth} transparent opacity={ellipseOpacity} />
+      {/* Live measurement dot */}
+      <mesh position={dotPos}>
+        <sphereGeometry args={[MEASUREMENT_DOT_RADIUS, 10, 10]} />
+        <meshStandardMaterial
+          color="#00d4ff"
+          emissive="#00d4ff"
+          emissiveIntensity={3 * strengthFactor}
+          transparent
+          opacity={dotOpacity}
+        />
+      </mesh>
+    </group>
+  );
 }
 
 /** Shared helper: compute the current quaternion from signal params + time.
@@ -486,45 +673,70 @@ export function QuaternionicSignalDemo({
   const structureOpacity = opacity * (0.45 + 0.55 * couplingStrength);
 
   return (
-    <group rotation={[receiverPitch, receiverYaw, 0]}>
-      {showClassicalSplit && <ClassicalSplitGhost params={params} currentTime={currentTime} />}
+    <group>
+      {/* ── WORLD VIEW: True EM wave polarization ellipse (fixed in world YZ plane) ──
+          Ground-truth wave that is invariant under receiver rotation.
+          Faint amber — unchanged physical reference. */}
+      <WorldEllipse params={params} opacity={opacity} />
 
-      {/* XY-plane shadow — shows how the quaternionic state projects to a classical orbit */}
-      {showProjectionShadow && <ProjectionShadow trail={trail} opacity={structureOpacity} />}
+      {/* ── RECEIVER VIEW: Rotating receiver frame + local measurement + recovery ── */}
+      <group rotation={[receiverPitch, receiverYaw, 0]}>
+        {/* Dual-pole sensing axes: r̂₁ = R(q)·ê_y (amber) and r̂₂ = R(q)·ê_z (purple).
+            Their orientation visually encodes the receiver quaternion q_r. */}
+        <ReceiverAxes amplitude={params.amplitude} opacity={structureOpacity} />
 
-      {/* Projected hypersphere boundary rings — always shown; evoke the 4D receiving  */}
-      {/* surface projected into 3D, as in the HypersphereVisualization reference.    */}
-      <HyperBoundary
-        amplitude={params.amplitude}
-        wComponent={wComponent}
-        currentTime={currentTime}
-        opacity={structureOpacity}
-      />
-
-      {/* Rich enhanced trail — toggled by showTrailHistory */}
-      {showTrailHistory && <TrailPath points={trail} demoMode="quaternionic" enhanced opacity={structureOpacity} />}
-
-      {/* Fiber rings — toggled by showFiber; rotation rate encodes |w| */}
-      {showFiber && <FiberRings trail={trail} currentTime={currentTime} wComponent={wComponent} opacity={structureOpacity} />}
-
-      {/* Pulsing halo — always shown; pulse rate encodes |w|; dims with coupling */}
-      <PulsingHalo tip={tip} wComponent={wComponent} opacity={structureOpacity} />
-
-      {/* Signal vector */}
-      <SignalVector tip={tip} demoMode="quaternionic" enhanced opacity={structureOpacity} />
-
-      {/* Local quaternion orientation frame — toggled by showLocalFrame */}
-      {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={structureOpacity} />}
-
-      {/* Boundary ripple pulse — receiver hypersphere manifold excited by incoming field */}
-      {showExcitation && (
-        <BoundaryRipplePulse
-          tip={tip}
+        {/* Projection of E onto receiver plane (cyan).
+            Drawn as [0, v₁, v₂] in local frame; after the rotation group transform
+            it appears in world space as v₁·r̂₁ + v₂·r̂₂ = E_proj.
+            Width and brightness encode ‖E_proj‖/amplitude (bright=aligned, dim=orthogonal). */}
+        <LocalMeasurementEllipse
           params={params}
+          receiverYaw={receiverYaw}
+          receiverPitch={receiverPitch}
+          currentTime={currentTime}
+          couplingStrength={couplingStrength}
+          opacity={opacity}
+        />
+
+        {showClassicalSplit && <ClassicalSplitGhost params={params} currentTime={currentTime} />}
+
+        {/* XY-plane shadow — shows how the quaternionic state projects to a classical orbit */}
+        {showProjectionShadow && <ProjectionShadow trail={trail} opacity={structureOpacity} />}
+
+        {/* Projected hypersphere boundary rings — always shown; evoke the 4D receiving  */}
+        {/* surface projected into 3D, as in the HypersphereVisualization reference.    */}
+        <HyperBoundary
+          amplitude={params.amplitude}
+          wComponent={wComponent}
           currentTime={currentTime}
           opacity={structureOpacity}
         />
-      )}
+
+        {/* Rich enhanced trail — toggled by showTrailHistory */}
+        {showTrailHistory && <TrailPath points={trail} demoMode="quaternionic" enhanced opacity={structureOpacity} />}
+
+        {/* Fiber rings — toggled by showFiber; rotation rate encodes |w| */}
+        {showFiber && <FiberRings trail={trail} currentTime={currentTime} wComponent={wComponent} opacity={structureOpacity} />}
+
+        {/* Pulsing halo — always shown; pulse rate encodes |w|; dims with coupling */}
+        <PulsingHalo tip={tip} wComponent={wComponent} opacity={structureOpacity} />
+
+        {/* Signal vector */}
+        <SignalVector tip={tip} demoMode="quaternionic" enhanced opacity={structureOpacity} />
+
+        {/* Local quaternion orientation frame — toggled by showLocalFrame */}
+        {showLocalFrame && <QuaternionFrame tip={tip} params={params} currentTime={currentTime} opacity={structureOpacity} />}
+
+        {/* Boundary ripple pulse — receiver hypersphere manifold excited by incoming field */}
+        {showExcitation && (
+          <BoundaryRipplePulse
+            tip={tip}
+            params={params}
+            currentTime={currentTime}
+            opacity={structureOpacity}
+          />
+        )}
+      </group>
     </group>
   );
 }

@@ -8,7 +8,6 @@ import { StatusStrip } from '../ui/StatusStrip';
 import { PresetBar, SweepMode } from '../ui/PresetBar';
 import { SpectrumPanel } from '../ui/SpectrumPanel';
 import { ReceptionMeter } from '../ui/ReceptionMeter';
-import { QuaternionicReceiverPanel } from '../features/QuaternionicReceiverPanel';
 import { SignalParams, defaultSignalParams, DemoMode } from '../math/signal';
 import { SignalBuffer, sampleSignal, BUFFER_SIZE, SAMPLE_INTERVAL_MS } from '../math/signalBuffer';
 import { computeSpectrum, SpectrumData } from '../math/dft';
@@ -259,15 +258,6 @@ export default function App() {
         )}
         {showIncomingWave && (
           <ReceptionMeter strength={couplingStrength} demoMode={params.demoMode} />
-        )}
-        {params.demoMode === 'quaternionic' && (
-          <QuaternionicReceiverPanel
-            params={params}
-            currentTime={currentTime}
-            receiverYaw={receiverYaw}
-            receiverPitch={receiverPitch}
-            couplingStrength={couplingStrength}
-          />
         )}
         <StatusStrip params={params} currentTime={currentTime} animSpeed={animSpeed} sweepMode={sweepMode} />
       </div>
