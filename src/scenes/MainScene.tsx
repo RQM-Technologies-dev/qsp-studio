@@ -5,7 +5,7 @@ import { Vector3 } from 'three';
 import { AxisFrame } from '../components/AxisFrame';
 import { ComplexSignalDemo } from '../features/ComplexSignalDemo';
 import { PolarizedSignalDemo } from '../features/PolarizedSignalDemo';
-import { QuaternionicSignalDemo } from '../features/QuaternionicSignalDemo';
+import { QuaternionicModemDemo } from '../features/QuaternionicModemDemo';
 import { IncomingWave } from '../features/IncomingWave';
 import { SampledFieldGlyph } from '../features/SampledFieldGlyph';
 import { ProjectionPlanes } from '../components/ProjectionPlanes';
@@ -72,9 +72,8 @@ function CameraController({ demoMode, morphProgress }: { demoMode: DemoMode; mor
 }
 
 function SceneContent({
-  params, currentTime, showClassicalSplit, showProjectionPlanes,
-  showBasis, showTrailHistory, showFiber, showLocalFrame,
-  showProjectionShadow, showIncomingWave, receiverYaw, receiverPitch,
+  params, currentTime, showProjectionPlanes,
+  showBasis, showIncomingWave, receiverYaw, receiverPitch,
   couplingStrength, morphProgress, prevMode,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
@@ -167,15 +166,9 @@ function SceneContent({
         />
       )}
       {isTransitioning && prevMode === 'quaternionic' && (
-        <QuaternionicSignalDemo
+        <QuaternionicModemDemo
           params={prevParams}
           currentTime={currentTime}
-          tip={prevTip}
-          showClassicalSplit={false}
-          showTrailHistory={showTrailHistory}
-          showFiber={showFiber}
-          showLocalFrame={showLocalFrame}
-          showProjectionShadow={false}
           opacity={outOpacity}
         />
       )}
@@ -208,20 +201,10 @@ function SceneContent({
         />
       )}
       {currentMode === 'quaternionic' && (
-        <QuaternionicSignalDemo
+        <QuaternionicModemDemo
           params={effectiveParams}
           currentTime={currentTime}
-          tip={tip}
-          showClassicalSplit={showClassicalSplit}
-          showTrailHistory={showTrailHistory}
-          showFiber={showFiber}
-          showLocalFrame={showLocalFrame}
-          showProjectionShadow={showProjectionShadow}
-          couplingStrength={couplingStrength}
           opacity={isTransitioning ? inOpacity : 1}
-          receiverYaw={receiverYaw}
-          receiverPitch={receiverPitch}
-          showExcitation={showIncomingWave}
         />
       )}
 

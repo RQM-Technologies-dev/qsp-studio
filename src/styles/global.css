@@ -847,3 +847,197 @@ body {
      CSS size is identical so there's no HiDPI scaling here — sharp on any
      screen density because the canvas itself is drawn at layout size. */
 }
+
+/* ── Quaternionic Modem HUD ──────────────────────────────────────────────────
+   Compact status overlay injected via drei Html into the 3D Canvas.
+   Positioned at the bottom-right of the scene wrapper.                        */
+
+.modem-hud {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 1.2rem;
+  width: 12.5rem;
+  background: rgba(10, 10, 20, 0.82);
+  border: 1px solid rgba(0, 212, 255, 0.20);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  font-family: var(--font);
+  font-size: 0.75rem;
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.modem-hud-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+  padding-bottom: 0.25rem;
+}
+
+.modem-hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.22rem;
+}
+
+.modem-hud-label {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.modem-hud-value {
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.modem-hud-tx {
+  color: #f59e0b;
+}
+
+.modem-hud-match {
+  color: #4ade80;
+}
+
+.modem-hud-mismatch {
+  color: #f87171;
+}
+
+.modem-hud-lock-on {
+  color: #4ade80;
+}
+
+.modem-hud-lock-weak {
+  color: #facc15;
+}
+
+.modem-hud-lock-off {
+  color: #f87171;
+}
+
+.modem-hud-bar-track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  margin: 0.35rem 0 0.25rem;
+  overflow: hidden;
+}
+
+.modem-hud-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.2s ease, background 0.3s ease;
+}
+
+/* Threshold guide — tick marks on the confidence bar.
+   Two <span> children with inline left% styles are positioned via absolute. */
+.modem-hud-thresh-guide {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  margin-bottom: 0.3rem;
+}
+
+.modem-hud-thresh-guide span {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateX(-50%);
+}
+
+.modem-hud-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.60rem;
+  color: var(--text-dim);
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+}
+
+.modem-hud-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Phase indicators */
+.modem-hud-phase-pilot {
+  color: #a78bfa;   /* violet — calibration / estimation */
+}
+
+.modem-hud-phase-data {
+  color: var(--text); /* neutral white */
+}
+
+/* Unstable-recovery warning (estimation fragility, not physical wave noise) */
+.modem-hud-unstable {
+  font-size: 0.63rem;
+  font-weight: 600;
+  color: #f87171;
+  letter-spacing: 0.04em;
+  margin-top: 0.1rem;
+  margin-bottom: 0.1rem;
+  text-align: center;
+  animation: qmodem-blink 0.9s steps(1) infinite;
+}
+
+@keyframes qmodem-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* Horizontal rule between HUD sections */
+.modem-hud-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0.3rem 0 0.25rem;
+}
+
+/* LINK STATS section header */
+.modem-hud-stats-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 0.2rem;
+}
+
+/* Stats grid: label / value / label / value in two columns */
+.modem-hud-stats-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  column-gap: 0.35rem;
+  row-gap: 0.14rem;
+  align-items: center;
+}
+
+.modem-hud-stats-grid .modem-hud-label {
+  text-align: right;
+}
+
+/* Conceptual footnote at the bottom of the HUD */
+.modem-hud-note {
+  margin-top: 0.3rem;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.30);
+  letter-spacing: 0.03em;
+  font-style: italic;
+  text-align: right;
+}
