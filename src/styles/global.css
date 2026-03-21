@@ -495,6 +495,39 @@ body {
   pointer-events: none;
 }
 
+/* ── Layers 4×2 grid ──────────────────────────────────────────────────────── */
+.layers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+
+.layer-grid-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0.28rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+  text-align: center;
+  width: 100%;
+}
+
+.layer-grid-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.layer-grid-btn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.10);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
+}
+
 /* Sweep indicator in status strip */
 .status-sweep {
   color: var(--amber);
@@ -855,7 +888,7 @@ body {
 .modem-hud {
   position: absolute;
   bottom: 3.5rem;
-  right: 1.2rem;
+  left: 1.2rem;
   width: 12.5rem;
   background: rgba(10, 10, 20, 0.82);
   border: 1px solid rgba(0, 212, 255, 0.20);

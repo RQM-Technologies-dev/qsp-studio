@@ -499,6 +499,23 @@ export interface QuaternionicModemDemoProps {
   currentTime: number;
   /** Opacity multiplier [0, 1] used during mode-morph fade transitions. */
   opacity?: number;
+  // ── Modem layer visibility toggles ─────────────────────────────────────────
+  /** Show the world-truth amber ellipse (transmitted polarization symbol). */
+  showWorldEllipse?: boolean;
+  /** Show the receiver body (gold icosahedron + sensing-plane ring). */
+  showReceiverBody?: boolean;
+  /** Show the receiver sensing axes (r1 amber, r2 purple, n blue-green). */
+  showReceiverAxes?: boolean;
+  /** Show the three gyroscopic gimbal rings. */
+  showGimbalRings?: boolean;
+  /** Show the cyan measured ellipse (receiver-local projection). */
+  showMeasuredEllipse?: boolean;
+  /** Show the white canonical template ghost (ideal recovery target). */
+  showGhostTemplate?: boolean;
+  /** Show the green recovered ellipse (symbol after inverse quaternion alignment). */
+  showRecoveredEllipse?: boolean;
+  /** Show the compact modem HUD readout overlay. */
+  showHud?: boolean;
 }
 
 /**
@@ -515,6 +532,14 @@ export function QuaternionicModemDemo({
   params,
   currentTime,
   opacity = 1,
+  showWorldEllipse = true,
+  showReceiverBody = true,
+  showReceiverAxes = true,
+  showGimbalRings = true,
+  showMeasuredEllipse = true,
+  showGhostTemplate = true,
+  showRecoveredEllipse = true,
+  showHud = true,
 }: QuaternionicModemDemoProps) {
   const { amplitude, frequency, phase: signalPhase } = params;
 
@@ -762,7 +787,7 @@ export function QuaternionicModemDemo({
     <group>
       {/* ── 1. World truth ellipse (amber) — invariant polarization symbol ───── */}
       {/* Fixed in the world YZ-plane; does NOT rotate with receiver or channel.  */}
-      {worldPts.length >= 2 && (
+      {showWorldEllipse && worldPts.length >= 2 && (
         <Line
           points={worldPts}
           color="#f59e0b"
@@ -773,21 +798,23 @@ export function QuaternionicModemDemo({
       )}
 
       {/* Live amber dot — tracks wave front at the current carrier phase */}
-      <mesh position={worldDot}>
-        <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
-        <meshStandardMaterial
-          color="#f59e0b"
-          emissive="#fbbf24"
-          emissiveIntensity={3}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
+      {showWorldEllipse && (
+        <mesh position={worldDot}>
+          <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
+          <meshStandardMaterial
+            color="#f59e0b"
+            emissive="#fbbf24"
+            emissiveIntensity={3}
+            transparent
+            opacity={opacity}
+          />
+        </mesh>
+      )}
 
       {/* ── 2. Canonical template ghost (white) — ideal recovery target ────────── */}
       {/* Shows the ideal recovered shape behind the green ellipse.                */}
       {/* Both live in the canonical world YZ-plane; when lock is good they match. */}
-      {worldPts.length >= 2 && (
+      {showGhostTemplate && worldPts.length >= 2 && (
         <Line
           points={worldPts}
           color="#e2e8f0"
@@ -803,17 +830,17 @@ export function QuaternionicModemDemo({
 
         {/* Gyroscopic gimbal rings in the three principal planes of the receiver   */}
         {/* frame.  They visually show that the modem can be oriented freely.       */}
-        <GimbalRings amplitude={amplitude} opacity={opacity} />
+        {showGimbalRings && <GimbalRings amplitude={amplitude} opacity={opacity} />}
 
         {/* Gold dual-pole receiver body */}
-        <ReceiverBody amplitude={amplitude} opacity={opacity} />
+        {showReceiverBody && <ReceiverBody amplitude={amplitude} opacity={opacity} />}
 
         {/* Sensing axes: r1 amber (I-ch), r2 purple (Q-ch), n blue-green (fwd) */}
-        <ReceiverAxes amplitude={amplitude} opacity={opacity} />
+        {showReceiverAxes && <ReceiverAxes amplitude={amplitude} opacity={opacity} />}
 
         {/* Cyan measured ellipse — drawn as [0, v1, v2] in local frame.         */}
         {/* The rotation group maps this to v1·r1 + v2·r2 in world space.        */}
-        {measuredPts.length >= 2 && (
+        {showMeasuredEllipse && measuredPts.length >= 2 && (
           <Line
             points={measuredPts}
             color="#00d4ff"
@@ -824,16 +851,18 @@ export function QuaternionicModemDemo({
         )}
 
         {/* Live cyan dot at current carrier phase — in receiver-local coords */}
-        <mesh position={[0, v1, v2]}>
-          <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
-          <meshStandardMaterial
-            color="#00d4ff"
-            emissive="#00d4ff"
-            emissiveIntensity={2}
-            transparent
-            opacity={Math.max(0.10, confidence) * opacity}
-          />
-        </mesh>
+        {showMeasuredEllipse && (
+          <mesh position={[0, v1, v2]}>
+            <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
+            <meshStandardMaterial
+              color="#00d4ff"
+              emissive="#00d4ff"
+              emissiveIntensity={2}
+              transparent
+              opacity={Math.max(0.10, confidence) * opacity}
+            />
+          </mesh>
+        )}
 
         {/* ── Invisible interaction sphere — captures pointer-down to start drag ─ */}
         {/* Covers the receiver body so the user can click anywhere on the modem.  */}
@@ -852,7 +881,7 @@ export function QuaternionicModemDemo({
       {/* Fades + jitters when confidence is low (estimation fragility, not       */}
       {/* physical wave noise).  The amplitude also collapses with projection     */}
       {/* energy loss — both effects are honest physics.                          */}
-      {recoveredPts.length >= 2 && (
+      {showRecoveredEllipse && recoveredPts.length >= 2 && (
         <Line
           points={recoveredPts}
           color="#4ade80"
@@ -863,28 +892,32 @@ export function QuaternionicModemDemo({
       )}
 
       {/* Live green dot on the recovered ellipse */}
-      <mesh position={recDotJittered}>
-        <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
-        <meshStandardMaterial
-          color="#4ade80"
-          emissive="#4ade80"
-          emissiveIntensity={2.5}
-          transparent
-          opacity={Math.max(0.08, confidence) * opacity}
-        />
-      </mesh>
+      {showRecoveredEllipse && (
+        <mesh position={recDotJittered}>
+          <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
+          <meshStandardMaterial
+            color="#4ade80"
+            emissive="#4ade80"
+            emissiveIntensity={2.5}
+            transparent
+            opacity={Math.max(0.08, confidence) * opacity}
+          />
+        </mesh>
+      )}
 
       {/* ── 5. Compact modem HUD overlay ─────────────────────────────────────── */}
-      <ModemHud
-        txSymbol={txSymbol}
-        rxSymbol={rxSymbol}
-        confidence={confidence}
-        lockState={lockState}
-        phase={txPhase}
-        stats={stats}
-        jitterActive={jitterActive}
-        isDragging={isDragging}
-      />
+      {showHud && (
+        <ModemHud
+          txSymbol={txSymbol}
+          rxSymbol={rxSymbol}
+          confidence={confidence}
+          lockState={lockState}
+          phase={txPhase}
+          stats={stats}
+          jitterActive={jitterActive}
+          isDragging={isDragging}
+        />
+      )}
     </group>
   );
 }
