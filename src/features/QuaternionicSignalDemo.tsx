@@ -55,8 +55,22 @@ const ELLIPSE_RESOLUTION = 80;
 /** Scale factor applied to signal amplitude to set the receiver-axis arrow length. */
 const RECEIVER_AXIS_SCALE = 1.15;
 
+/** Opacity of the n̂ (propagation-normal) receiver axis — subtler than the sensing axes. */
+const RECEIVER_NORMAL_OPACITY = 0.40;
+
+/** Line width of the n̂ receiver axis (thinner than the I/Q sensing axes). */
+const RECEIVER_NORMAL_LINE_WIDTH = 1.4;
+
 /** Radius of the live-measurement dot sphere (in scene units). */
 const MEASUREMENT_DOT_RADIUS = 0.042;
+
+/**
+ * Minimum coupling-strength contribution to the measurement-ellipse visibility floor.
+ * At 0.3 the coupling term can contribute at most 0.3 to strengthFactor, keeping the
+ * ellipse barely visible at extreme misalignment so the receiver frame is still legible,
+ * without overriding the physically accurate projStrength signal at normal orientations.
+ */
+const COUPLING_STRENGTH_FLOOR_WEIGHT = 0.3;
 
 /**
  * E-field vector in world space for the EM plane wave propagating along +X.
@@ -102,20 +116,29 @@ function WorldEllipse({ params, opacity }: { params: SignalParams; opacity: numb
 }
 
 /**
- * Dual-pole receiver axes drawn in the receiver's local frame.
- *  r1 = R(q)·ê_y  (I-channel, amber)
- *  r2 = R(q)·ê_z  (Q-channel, purple)
- * Since this is placed inside the rotation group they automatically point in
- * the correct world-space directions after the group transform.
+ * Complete SO(3) orthonormal receiver frame drawn in the receiver's local space.
+ *
+ *  r̂₁ = R(q)·ê_y  — I-channel sensing axis  (amber,  bright)
+ *  r̂₂ = R(q)·ê_z  — Q-channel sensing axis  (purple, bright)
+ *  n̂  = R(q)·ê_x  — normal / propagation axis (green,  dim)
+ *
+ * Together (r̂₁, r̂₂, n̂) form the SO(3) image of the receiver quaternion q.
+ * Since these live inside the rotation group they are automatically transformed
+ * to the correct world-space directions by the parent Three.js group.
  */
 function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: number }) {
   const AX = amplitude * RECEIVER_AXIS_SCALE;
   const r1pts: [number, number, number][] = [[0, 0, 0], [0, AX, 0]];
   const r2pts: [number, number, number][] = [[0, 0, 0], [0, 0, AX]];
+  const npts:  [number, number, number][] = [[0, 0, 0], [AX, 0, 0]];
   return (
     <group>
+      {/* r̂₁ = R(q)·ê_y — I-channel */}
       <Line points={r1pts} color="#f59e0b" lineWidth={2.2} transparent opacity={0.80 * opacity} />
+      {/* r̂₂ = R(q)·ê_z — Q-channel */}
       <Line points={r2pts} color="#8b5cf6" lineWidth={2.2} transparent opacity={0.80 * opacity} />
+      {/* n̂ = R(q)·ê_x — propagation-normal axis; completes the SO(3) receiver triad */}
+      <Line points={npts}  color="#55ee88" lineWidth={RECEIVER_NORMAL_LINE_WIDTH} transparent opacity={RECEIVER_NORMAL_OPACITY * opacity} />
     </group>
   );
 }
@@ -128,14 +151,13 @@ function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: numb
  *   v₂ = E_world · r̂₂   (Q-channel projection)
  *
  * Because this element lives inside the receiver rotation group, the Three.js
- * transform R(q) is automatically applied: these local-frame points appear in
- * world space as v₁·r̂₁ + v₂·r̂₂ — which is exactly the quaternionically
- * recovered signal (Section 4 of the problem statement).
+ * transform R(q) is automatically applied.  In world space each point becomes
+ * v₁·r̂₁ + v₂·r̂₂, which is the projection of E onto the receiver plane.
  *
- * Visual interpretation:
- *  • Receiver aligned  → ellipse matches the world ellipse (full recovery)
- *  • Receiver tilted   → ellipse compresses (partial projection)
- *  • Receiver ⊥ wave  → ellipse collapses toward a point (signal lost)
+ * Signal strength (‖E_proj‖) drives visual intensity:
+ *  • Aligned receiver  → projStrength ≈ 1 → bright, thick cyan ellipse
+ *  • Tilted receiver   → projStrength < 1 → ellipse compresses and dims
+ *  • Orthogonal receiver → projStrength ≈ 0 → ellipse collapses, nearly invisible
  */
 function LocalMeasurementEllipse({
   params, receiverYaw, receiverPitch, currentTime, couplingStrength, opacity,
@@ -148,7 +170,11 @@ function LocalMeasurementEllipse({
   opacity: number;
 }) {
   const { amplitude, polarization, ellipticity } = params;
-  const ellipsePts = useMemo<[number, number, number][]>(() => {
+
+  // Compute the projected ellipse points AND the peak projection strength in one pass.
+  // projStrength = max_θ(‖E_proj(θ)‖) / amplitude ∈ [0,1].
+  // This is the physically exact signal intensity — bright when aligned, dark when orthogonal.
+  const { ellipsePts, projStrength } = useMemo(() => {
     const { jAxis, kAxis } = computeReceiverBasis(receiverYaw, receiverPitch);
     const Ay = amplitude;
     let Az = amplitude;
@@ -156,15 +182,20 @@ function LocalMeasurementEllipse({
     if (polarization === 'linear') { Az = 0; delta = 0; }
     else if (polarization === 'elliptical') { Az = amplitude * ellipticity; delta = Math.PI / 2; }
     const result: [number, number, number][] = [];
+    let maxProjSq = 0;
     for (let i = 0; i <= ELLIPSE_RESOLUTION; i++) {
       const theta = (i / ELLIPSE_RESOLUTION) * 2 * Math.PI;
       const ey = Ay * Math.cos(theta);
       const ez = Az * Math.cos(theta + delta);
       const v1 = ey * jAxis[1] + ez * jAxis[2];
       const v2 = ey * kAxis[1] + ez * kAxis[2];
+      const projSq = v1 * v1 + v2 * v2;
+      if (projSq > maxProjSq) maxProjSq = projSq;
       result.push([0, v1, v2]);
     }
-    return result;
+    // Normalize: world peak = amplitude (true for all polarization modes)
+    const strength = amplitude > 0 ? Math.min(1, Math.sqrt(maxProjSq) / amplitude) : 0;
+    return { ellipsePts: result, projStrength: strength };
   }, [amplitude, polarization, ellipticity, receiverYaw, receiverPitch]);
 
   // Current live measurement dot
@@ -176,19 +207,26 @@ function LocalMeasurementEllipse({
   const dotPos: [number, number, number] = [0, v1Now, v2Now];
 
   if (ellipsePts.length < 2) return null;
-  const ellipseOpacity = 0.65 * (0.35 + 0.65 * couplingStrength) * opacity;
-  const dotOpacity = (0.5 + 0.5 * couplingStrength) * opacity;
+
+  // Color intensity driven by projStrength: bright = strong alignment, dim = poor alignment.
+  // couplingStrength provides a secondary visibility floor (weighted by COUPLING_STRENGTH_FLOOR_WEIGHT)
+  // so the ellipse outline stays barely legible at extreme misalignment.
+  const strengthFactor = Math.max(projStrength, couplingStrength * COUPLING_STRENGTH_FLOOR_WEIGHT);
+  const ellipseOpacity = (0.15 + 0.85 * strengthFactor) * opacity;
+  const ellipseLineWidth = 0.5 + 2.0 * projStrength;
+  const dotOpacity = (0.3 + 0.7 * strengthFactor) * opacity;
+
   return (
     <group>
-      {/* Recovered / local-measurement ellipse — cyan to distinguish from world ellipse */}
-      <Line points={ellipsePts} color="#00d4ff" lineWidth={1.8} transparent opacity={ellipseOpacity} />
+      {/* Measurement ellipse — width and brightness encode ‖E_proj‖ / amplitude */}
+      <Line points={ellipsePts} color="#00d4ff" lineWidth={ellipseLineWidth} transparent opacity={ellipseOpacity} />
       {/* Live measurement dot */}
       <mesh position={dotPos}>
         <sphereGeometry args={[MEASUREMENT_DOT_RADIUS, 10, 10]} />
         <meshStandardMaterial
           color="#00d4ff"
           emissive="#00d4ff"
-          emissiveIntensity={3}
+          emissiveIntensity={3 * strengthFactor}
           transparent
           opacity={dotOpacity}
         />
@@ -647,10 +685,10 @@ export function QuaternionicSignalDemo({
             Their orientation visually encodes the receiver quaternion q_r. */}
         <ReceiverAxes amplitude={params.amplitude} opacity={structureOpacity} />
 
-        {/* Local measurement / recovered signal ellipse (cyan).
+        {/* Projection of E onto receiver plane (cyan).
             Drawn as [0, v₁, v₂] in local frame; after the rotation group transform
-            it appears in world space as v₁·r̂₁ + v₂·r̂₂ — the quaternionically
-            recovered signal. Matches world ellipse when aligned, compresses when tilted. */}
+            it appears in world space as v₁·r̂₁ + v₂·r̂₂ = E_proj.
+            Width and brightness encode ‖E_proj‖/amplitude (bright=aligned, dim=orthogonal). */}
         <LocalMeasurementEllipse
           params={params}
           receiverYaw={receiverYaw}
