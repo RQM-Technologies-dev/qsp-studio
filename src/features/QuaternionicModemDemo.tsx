@@ -6,9 +6,9 @@
  * Visual story:
  *   world wave  →  rotated channel + receiver frame  →  quaternion alignment  →  recovered symbol
  *
- * Four visual layers:
- *   Amber  — world truth (transmitted polarization symbol, invariant under rotation)
- *   White  — canonical template ghost (ideal recovery target, faint behind green)
+ * Visual layers:
+ *   Gold   — gimbal rings (physical orientation of the Quaternionic Modem in 3D space;
+ *             the gold YZ ring faces the EM wave and captures it)
  *   Cyan   — measured  (projection onto the rotating receiver plane)
  *   Green  — recovered (symbol after inverse quaternion alignment)
  *
@@ -54,7 +54,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Line, Html } from '@react-three/drei';
-import { Mesh } from 'three';
 
 import { SignalParams } from '../math/signal';
 import {
@@ -71,7 +70,6 @@ import {
   quaternionToBasis,
   projectFieldToReceiver,
   recoverToCanonical,
-  sampleWorldEllipse,
   sampleMeasuredEllipseLocal,
   sampleRecoveredEllipse,
   computeConfidence,
@@ -141,9 +139,6 @@ const JITTER_AMP_SCALE = 0.18;
  */
 const HUD_UPDATE_INTERVAL = 6;
 
-/** Arrow length as a multiple of amplitude. */
-const AXIS_SCALE = 1.3;
-
 /** Radius of the live-dot spheres. */
 const DOT_RADIUS = 0.045;
 
@@ -185,90 +180,21 @@ interface ModemStats {
  */
 const UNKNOWN_SYMBOL: PolarizationSymbol = { name: 'UNKNOWN', Ay: 0, Az: 0, delta: 0 };
 
-// ── Receiver body sub-components ─────────────────────────────────────────────
-
-/** Gold icosahedron + sensing-plane ring at the receiver origin. */
-function ReceiverBody({ amplitude, opacity }: { amplitude: number; opacity: number }) {
-  const bodyRef = useRef<Mesh>(null);
-  const scale = amplitude * 0.17;
-
-  const N = 48;
-  const r = amplitude * 0.52;
-  const ringPts: [number, number, number][] = Array.from({ length: N + 1 }, (_, i) => {
-    const a = (i / N) * 2 * Math.PI;
-    return [0, r * Math.cos(a), r * Math.sin(a)] as [number, number, number];
-  });
-
-  return (
-    <group>
-      <mesh ref={bodyRef} scale={[scale, scale, scale]}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial
-          color="#f59e0b"
-          emissive="#fbbf24"
-          emissiveIntensity={0.5}
-          roughness={0.3}
-          metalness={0.7}
-          transparent
-          opacity={opacity}
-        />
-      </mesh>
-      {/* Sensing-plane indicator ring in local YZ-plane */}
-      <Line
-        points={ringPts}
-        color="#f59e0b"
-        lineWidth={0.8}
-        transparent
-        opacity={0.22 * opacity}
-      />
-    </group>
-  );
-}
-
-/**
- * Dual-pole sensing axes rendered in receiver-local coordinates.
- *   r1  — amber, I-channel (+Y local)
- *   r2  — purple, Q-channel (+Z local)
- *   n   — blue-green, propagation direction (+X local, shorter)
- */
-function ReceiverAxes({ amplitude, opacity }: { amplitude: number; opacity: number }) {
-  const len  = amplitude * AXIS_SCALE;
-  const nLen = len * 0.45;
-
-  const r1pts: [number, number, number][] = [[0, 0, 0], [0, len, 0]];
-  const r2pts: [number, number, number][] = [[0, 0, 0], [0, 0, len]];
-  const npts:  [number, number, number][] = [[0, 0, 0], [nLen, 0, 0]];
-
-  return (
-    <group>
-      <Line points={r1pts} color="#f59e0b" lineWidth={3.0} transparent opacity={0.90 * opacity} />
-      <mesh position={[0, len, 0]}>
-        <coneGeometry args={[0.032, 0.11, 8]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={2} transparent opacity={opacity} />
-      </mesh>
-
-      <Line points={r2pts} color="#8b5cf6" lineWidth={3.0} transparent opacity={0.90 * opacity} />
-      <mesh position={[0, 0, len]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.032, 0.11, 8]} />
-        <meshStandardMaterial color="#8b5cf6" emissive="#8b5cf6" emissiveIntensity={2} transparent opacity={opacity} />
-      </mesh>
-
-      <Line points={npts} color="#22d3ee" lineWidth={1.2} transparent opacity={0.30 * opacity} />
-    </group>
-  );
-}
-
 /**
  * Three concentric gimbal rings rendered in the receiver-local frame.
  * Each ring lives in one of the three principal planes (YZ, XZ, XY), giving
  * the visual impression of a gyroscopic gimbal that can be freely rotated.
+ *
+ * The YZ ring is gold — it represents the reception plane that always faces
+ * the incoming EM wave (wave propagates along X; the YZ plane captures the
+ * transverse field components).
  *
  * The rings rotate with the receiver group, so the user can see all three
  * planes change orientation as they drag the modem around.
  */
 function GimbalRings({ amplitude, opacity }: { amplitude: number; opacity: number }) {
   const N = 64;
-  const r = amplitude * 0.80;
+  const r = amplitude * 1.4;
 
   const yzRing: [number, number, number][] = Array.from({ length: N + 1 }, (_, i) => {
     const a = (i / N) * 2 * Math.PI;
@@ -285,12 +211,12 @@ function GimbalRings({ amplitude, opacity }: { amplitude: number; opacity: numbe
 
   return (
     <group>
-      {/* YZ-plane ring — matches the sensing plane (I/Q axes) */}
-      <Line points={yzRing} color="#38bdf8" lineWidth={0.8} transparent opacity={0.30 * opacity} />
+      {/* YZ-plane ring — gold: always faces the EM wave, captures transverse field */}
+      <Line points={yzRing} color="#f59e0b" lineWidth={2.5} transparent opacity={0.85 * opacity} />
       {/* XZ-plane ring */}
-      <Line points={xzRing} color="#818cf8" lineWidth={0.8} transparent opacity={0.22 * opacity} />
+      <Line points={xzRing} color="#818cf8" lineWidth={1.8} transparent opacity={0.65 * opacity} />
       {/* XY-plane ring */}
-      <Line points={xyRing} color="#a78bfa" lineWidth={0.8} transparent opacity={0.22 * opacity} />
+      <Line points={xyRing} color="#a78bfa" lineWidth={1.8} transparent opacity={0.65 * opacity} />
     </group>
   );
 }
@@ -442,7 +368,7 @@ function ModemHud({
         <div className="modem-hud-divider" />
         <div className="modem-hud-legend">
           <span className="modem-hud-dot" style={{ background: '#f59e0b' }} />
-          <span>TX truth</span>
+          <span>Gimbal</span>
           <span className="modem-hud-dot" style={{ background: '#00d4ff' }} />
           <span>Measured</span>
           <span className="modem-hud-dot" style={{ background: '#4ade80' }} />
@@ -500,18 +426,10 @@ export interface QuaternionicModemDemoProps {
   /** Opacity multiplier [0, 1] used during mode-morph fade transitions. */
   opacity?: number;
   // ── Modem layer visibility toggles ─────────────────────────────────────────
-  /** Show the world-truth amber ellipse (transmitted polarization symbol). */
-  showWorldEllipse?: boolean;
-  /** Show the receiver body (gold icosahedron + sensing-plane ring). */
-  showReceiverBody?: boolean;
-  /** Show the receiver sensing axes (r1 amber, r2 purple, n blue-green). */
-  showReceiverAxes?: boolean;
   /** Show the three gyroscopic gimbal rings. */
   showGimbalRings?: boolean;
   /** Show the cyan measured ellipse (receiver-local projection). */
   showMeasuredEllipse?: boolean;
-  /** Show the white canonical template ghost (ideal recovery target). */
-  showGhostTemplate?: boolean;
   /** Show the green recovered ellipse (symbol after inverse quaternion alignment). */
   showRecoveredEllipse?: boolean;
   /** Show the compact modem HUD readout overlay. */
@@ -532,12 +450,8 @@ export function QuaternionicModemDemo({
   params,
   currentTime,
   opacity = 1,
-  showWorldEllipse = true,
-  showReceiverBody = true,
-  showReceiverAxes = true,
   showGimbalRings = true,
   showMeasuredEllipse = true,
-  showGhostTemplate = true,
   showRecoveredEllipse = true,
   showHud = true,
 }: QuaternionicModemDemoProps) {
@@ -735,10 +649,6 @@ export function QuaternionicModemDemo({
   const sym = txSymbol;
   const { r1, r2 } = quaternionToBasis(effectiveQ);
 
-  // World truth ellipse — fixed in the world YZ-plane
-  const worldPts = sampleWorldEllipse(ELLIPSE_N, sym.Ay * amplitude, sym.Az * amplitude, sym.delta)
-    .map(p => p as [number, number, number]);
-
   // Measured ellipse in receiver-LOCAL coordinates [0, v1, v2]
   // Placed inside the rotation group → appears as v1·r1 + v2·r2 in world space
   const measuredPts = sampleMeasuredEllipseLocal(
@@ -785,58 +695,13 @@ export function QuaternionicModemDemo({
 
   return (
     <group>
-      {/* ── 1. World truth ellipse (amber) — invariant polarization symbol ───── */}
-      {/* Fixed in the world YZ-plane; does NOT rotate with receiver or channel.  */}
-      {showWorldEllipse && worldPts.length >= 2 && (
-        <Line
-          points={worldPts}
-          color="#f59e0b"
-          lineWidth={2.2}
-          transparent
-          opacity={0.70 * opacity}
-        />
-      )}
-
-      {/* Live amber dot — tracks wave front at the current carrier phase */}
-      {showWorldEllipse && (
-        <mesh position={worldDot}>
-          <sphereGeometry args={[DOT_RADIUS, 8, 8]} />
-          <meshStandardMaterial
-            color="#f59e0b"
-            emissive="#fbbf24"
-            emissiveIntensity={3}
-            transparent
-            opacity={opacity}
-          />
-        </mesh>
-      )}
-
-      {/* ── 2. Canonical template ghost (white) — ideal recovery target ────────── */}
-      {/* Shows the ideal recovered shape behind the green ellipse.                */}
-      {/* Both live in the canonical world YZ-plane; when lock is good they match. */}
-      {showGhostTemplate && worldPts.length >= 2 && (
-        <Line
-          points={worldPts}
-          color="#e2e8f0"
-          lineWidth={1.0}
-          transparent
-          opacity={0.18 * opacity}
-        />
-      )}
-
-      {/* ── 3. Receiver rotation group — axes + measured ellipse tumble together ── */}
-      {/* Three.js group.quaternion: [x, y, z, w]                                   */}
+      {/* ── 1. Receiver rotation group — gimbal + measured ellipse tumble together ── */}
+      {/* Three.js group.quaternion: [x, y, z, w]                                      */}
       <group quaternion={[qx, qy, qz, qw]}>
 
-        {/* Gyroscopic gimbal rings in the three principal planes of the receiver   */}
-        {/* frame.  They visually show that the modem can be oriented freely.       */}
+        {/* Gyroscopic gimbal rings in the three principal planes of the receiver    */}
+        {/* frame.  The gold YZ ring always faces the EM wave and captures it.       */}
         {showGimbalRings && <GimbalRings amplitude={amplitude} opacity={opacity} />}
-
-        {/* Gold dual-pole receiver body */}
-        {showReceiverBody && <ReceiverBody amplitude={amplitude} opacity={opacity} />}
-
-        {/* Sensing axes: r1 amber (I-ch), r2 purple (Q-ch), n blue-green (fwd) */}
-        {showReceiverAxes && <ReceiverAxes amplitude={amplitude} opacity={opacity} />}
 
         {/* Cyan measured ellipse — drawn as [0, v1, v2] in local frame.         */}
         {/* The rotation group maps this to v1·r1 + v2·r2 in world space.        */}
@@ -865,22 +730,22 @@ export function QuaternionicModemDemo({
         )}
 
         {/* ── Invisible interaction sphere — captures pointer-down to start drag ─ */}
-        {/* Covers the receiver body so the user can click anywhere on the modem.  */}
+        {/* Covers the gimbal so the user can click anywhere on the modem.          */}
         <mesh
           onPointerDown={handlePointerDown}
           onPointerOver={handlePointerOver}
           onPointerOut={handlePointerOut}
         >
-          <sphereGeometry args={[amplitude * 0.65, 16, 16]} />
+          <sphereGeometry args={[amplitude * 1.5, 16, 16]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       </group>
 
-      {/* ── 4. Recovered ellipse (green) — canonical world YZ-plane ─────────── */}
-      {/* R(q_eff)^{-1} · E_proj_world — matches amber when lock is good.        */}
-      {/* Fades + jitters when confidence is low (estimation fragility, not       */}
-      {/* physical wave noise).  The amplitude also collapses with projection     */}
-      {/* energy loss — both effects are honest physics.                          */}
+      {/* ── 2. Recovered ellipse (green) — canonical world YZ-plane ─────────── */}
+      {/* R(q_eff)^{-1} · E_proj_world — matches gimbal reception plane when      */}
+      {/* lock is good.  Fades + jitters when confidence is low (estimation       */}
+      {/* fragility, not physical wave noise).  The amplitude also collapses with */}
+      {/* projection energy loss — both effects are honest physics.               */}
       {showRecoveredEllipse && recoveredPts.length >= 2 && (
         <Line
           points={recoveredPts}

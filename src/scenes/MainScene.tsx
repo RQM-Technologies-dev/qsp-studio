@@ -33,12 +33,8 @@ interface MainSceneProps {
   /** The mode we are transitioning away from. */
   prevMode: DemoMode;
   // ── Modem layer visibility toggles (quaternionic mode only) ──────────────
-  showModemWorldEllipse: boolean;
-  showModemReceiverBody: boolean;
-  showModemReceiverAxes: boolean;
   showModemGimbalRings: boolean;
   showModemMeasuredEllipse: boolean;
-  showModemGhostTemplate: boolean;
   showModemRecoveredEllipse: boolean;
   showModemHud: boolean;
 }
@@ -84,8 +80,7 @@ function SceneContent({
   params, currentTime, showProjectionPlanes,
   showBasis, showIncomingWave, receiverYaw, receiverPitch,
   couplingStrength, morphProgress, prevMode,
-  showModemWorldEllipse, showModemReceiverBody, showModemReceiverAxes,
-  showModemGimbalRings, showModemMeasuredEllipse, showModemGhostTemplate,
+  showModemGimbalRings, showModemMeasuredEllipse,
   showModemRecoveredEllipse, showModemHud,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
@@ -217,12 +212,8 @@ function SceneContent({
           params={effectiveParams}
           currentTime={currentTime}
           opacity={isTransitioning ? inOpacity : 1}
-          showWorldEllipse={showModemWorldEllipse}
-          showReceiverBody={showModemReceiverBody}
-          showReceiverAxes={showModemReceiverAxes}
           showGimbalRings={showModemGimbalRings}
           showMeasuredEllipse={showModemMeasuredEllipse}
-          showGhostTemplate={showModemGhostTemplate}
           showRecoveredEllipse={showModemRecoveredEllipse}
           showHud={showModemHud}
         />

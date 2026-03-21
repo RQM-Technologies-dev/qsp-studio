@@ -17,12 +17,8 @@ interface ControlPanelProps {
   receiverPitch: number;
   sweepMode: SweepMode;
   // ── Modem layer toggles (quaternionic mode) ─────────────────────────────
-  showModemWorldEllipse: boolean;
-  showModemReceiverBody: boolean;
-  showModemReceiverAxes: boolean;
   showModemGimbalRings: boolean;
   showModemMeasuredEllipse: boolean;
-  showModemGhostTemplate: boolean;
   showModemRecoveredEllipse: boolean;
   showModemHud: boolean;
   onParamsChange: (p: Partial<SignalParams>) => void;
@@ -38,12 +34,8 @@ interface ControlPanelProps {
   onShowIncomingWaveChange: (v: boolean) => void;
   onReceiverYawChange: (v: number) => void;
   onReceiverPitchChange: (v: number) => void;
-  onShowModemWorldEllipseChange: (v: boolean) => void;
-  onShowModemReceiverBodyChange: (v: boolean) => void;
-  onShowModemReceiverAxesChange: (v: boolean) => void;
   onShowModemGimbalRingsChange: (v: boolean) => void;
   onShowModemMeasuredEllipseChange: (v: boolean) => void;
-  onShowModemGhostTemplateChange: (v: boolean) => void;
   onShowModemRecoveredEllipseChange: (v: boolean) => void;
   onShowModemHudChange: (v: boolean) => void;
 }
@@ -130,12 +122,8 @@ export function ControlPanel({
   receiverYaw,
   receiverPitch,
   sweepMode,
-  showModemWorldEllipse,
-  showModemReceiverBody,
-  showModemReceiverAxes,
   showModemGimbalRings,
   showModemMeasuredEllipse,
-  showModemGhostTemplate,
   showModemRecoveredEllipse,
   showModemHud,
   onParamsChange,
@@ -148,12 +136,8 @@ export function ControlPanel({
   onShowIncomingWaveChange,
   onReceiverYawChange,
   onReceiverPitchChange,
-  onShowModemWorldEllipseChange,
-  onShowModemReceiverBodyChange,
-  onShowModemReceiverAxesChange,
   onShowModemGimbalRingsChange,
   onShowModemMeasuredEllipseChange,
-  onShowModemGhostTemplateChange,
   onShowModemRecoveredEllipseChange,
   onShowModemHudChange,
 }: ControlPanelProps) {
@@ -219,24 +203,6 @@ export function ControlPanel({
           /* Modem-specific 4×2 grid — one button per visual component */
           <div className="layers-grid">
             <LayerGridBtn
-              label="TX Ellipse"
-              active={showModemWorldEllipse}
-              onToggle={() => onShowModemWorldEllipseChange(!showModemWorldEllipse)}
-              title="Show the world-truth amber ellipse (transmitted polarization symbol)"
-            />
-            <LayerGridBtn
-              label="RX Body"
-              active={showModemReceiverBody}
-              onToggle={() => onShowModemReceiverBodyChange(!showModemReceiverBody)}
-              title="Show the gold icosahedron receiver body and sensing-plane ring"
-            />
-            <LayerGridBtn
-              label="RX Axes"
-              active={showModemReceiverAxes}
-              onToggle={() => onShowModemReceiverAxesChange(!showModemReceiverAxes)}
-              title="Show the receiver sensing axes (r1 amber I-ch, r2 purple Q-ch, n forward)"
-            />
-            <LayerGridBtn
               label="Gimbal"
               active={showModemGimbalRings}
               onToggle={() => onShowModemGimbalRingsChange(!showModemGimbalRings)}
@@ -247,12 +213,6 @@ export function ControlPanel({
               active={showModemMeasuredEllipse}
               onToggle={() => onShowModemMeasuredEllipseChange(!showModemMeasuredEllipse)}
               title="Show the cyan measured ellipse (receiver-local projection of transmitted signal)"
-            />
-            <LayerGridBtn
-              label="Ghost"
-              active={showModemGhostTemplate}
-              onToggle={() => onShowModemGhostTemplateChange(!showModemGhostTemplate)}
-              title="Show the white canonical template ghost (ideal recovery target)"
             />
             <LayerGridBtn
               label="Recovered"
