@@ -813,3 +813,37 @@ body {
   color: var(--text-dim);
   opacity: 0.6;
 }
+
+/* ── Quaternionic receiver panel cluster ──────────────────────────────────── */
+/*
+ * Three synchronized canvas panels (Local Measurement / Quaternion State /
+ * Recovered Signal) shown exclusively in Quaternionic / QAM mode.
+ * Positioned at the top-left of the scene view so they don't conflict with the
+ * spectrum panel (bottom-left) or the info overlay (top-right).
+ */
+.quat-receiver-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  flex-direction: row;
+  gap: 0.4rem;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+}
+
+.quat-panel-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.quat-panel-canvas {
+  display: block;
+  border-radius: 4px;
+  /* Native pixel resolution is set by width/height attrs on the <canvas>.
+     CSS size is identical so there's no HiDPI scaling here — sharp on any
+     screen density because the canvas itself is drawn at layout size. */
+}
