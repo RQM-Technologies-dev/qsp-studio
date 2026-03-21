@@ -25,7 +25,7 @@ const COUPLING_LERP_SPEED = 6;
 export default function App() {
   const [params, setParams] = useState<SignalParams>(defaultSignalParams);
   const [currentTime, setCurrentTime] = useState(0);
-  const [animSpeed, setAnimSpeed] = useState(1.0);
+  const [animSpeed, setAnimSpeed] = useState(0.2);
   const [showClassicalSplit, setShowClassicalSplit] = useState(false);
   const [showProjectionPlanes, setShowProjectionPlanes] = useState(false);
   const [sweepMode, setSweepMode] = useState<SweepMode>('none');
@@ -38,6 +38,16 @@ export default function App() {
   const [showSpectrumPanel, setShowSpectrumPanel] = useState(true);
   const [showProjectionShadow, setShowProjectionShadow] = useState(false);
   const [showIncomingWave, setShowIncomingWave] = useState(true);
+
+  // ── Quaternionic Modem layer visibility toggles ─────────────────────────
+  const [showModemWorldEllipse,    setShowModemWorldEllipse]    = useState(true);
+  const [showModemReceiverBody,    setShowModemReceiverBody]    = useState(true);
+  const [showModemReceiverAxes,    setShowModemReceiverAxes]    = useState(true);
+  const [showModemGimbalRings,     setShowModemGimbalRings]     = useState(true);
+  const [showModemMeasuredEllipse, setShowModemMeasuredEllipse] = useState(true);
+  const [showModemGhostTemplate,   setShowModemGhostTemplate]   = useState(true);
+  const [showModemRecoveredEllipse, setShowModemRecoveredEllipse] = useState(true);
+  const [showModemHud,             setShowModemHud]             = useState(true);
 
   // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
   const [receiverYaw,   setReceiverYaw]   = useState(0);
@@ -251,6 +261,14 @@ export default function App() {
           couplingStrength={couplingStrength}
           morphProgress={morphProgress}
           prevMode={prevMode}
+          showModemWorldEllipse={showModemWorldEllipse}
+          showModemReceiverBody={showModemReceiverBody}
+          showModemReceiverAxes={showModemReceiverAxes}
+          showModemGimbalRings={showModemGimbalRings}
+          showModemMeasuredEllipse={showModemMeasuredEllipse}
+          showModemGhostTemplate={showModemGhostTemplate}
+          showModemRecoveredEllipse={showModemRecoveredEllipse}
+          showModemHud={showModemHud}
         />
         <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
@@ -276,6 +294,14 @@ export default function App() {
         receiverYaw={receiverYaw}
         receiverPitch={receiverPitch}
         sweepMode={sweepMode}
+        showModemWorldEllipse={showModemWorldEllipse}
+        showModemReceiverBody={showModemReceiverBody}
+        showModemReceiverAxes={showModemReceiverAxes}
+        showModemGimbalRings={showModemGimbalRings}
+        showModemMeasuredEllipse={showModemMeasuredEllipse}
+        showModemGhostTemplate={showModemGhostTemplate}
+        showModemRecoveredEllipse={showModemRecoveredEllipse}
+        showModemHud={showModemHud}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
         onShowClassicalSplitChange={setShowClassicalSplit}
@@ -289,6 +315,14 @@ export default function App() {
         onShowIncomingWaveChange={setShowIncomingWave}
         onReceiverYawChange={setReceiverYaw}
         onReceiverPitchChange={setReceiverPitch}
+        onShowModemWorldEllipseChange={setShowModemWorldEllipse}
+        onShowModemReceiverBodyChange={setShowModemReceiverBody}
+        onShowModemReceiverAxesChange={setShowModemReceiverAxes}
+        onShowModemGimbalRingsChange={setShowModemGimbalRings}
+        onShowModemMeasuredEllipseChange={setShowModemMeasuredEllipse}
+        onShowModemGhostTemplateChange={setShowModemGhostTemplate}
+        onShowModemRecoveredEllipseChange={setShowModemRecoveredEllipse}
+        onShowModemHudChange={setShowModemHud}
       />
     </div>
   );

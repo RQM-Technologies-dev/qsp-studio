@@ -32,13 +32,22 @@ interface MainSceneProps {
   morphProgress: number;
   /** The mode we are transitioning away from. */
   prevMode: DemoMode;
+  // ── Modem layer visibility toggles (quaternionic mode only) ──────────────
+  showModemWorldEllipse: boolean;
+  showModemReceiverBody: boolean;
+  showModemReceiverAxes: boolean;
+  showModemGimbalRings: boolean;
+  showModemMeasuredEllipse: boolean;
+  showModemGhostTemplate: boolean;
+  showModemRecoveredEllipse: boolean;
+  showModemHud: boolean;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
 const MODE_CAMERA: Record<DemoMode, [number, number, number]> = {
   complex:      [0, 0.3, 5.5],
   polarized:    [4.0, 2.2, 4.0],
-  quaternionic: [3.2, 2.8, 4.5],
+  quaternionic: [1.8, 1.5, 2.5],
 };
 
 /** Fraction of the remaining distance to travel per frame — controls camera smoothness. */
@@ -75,6 +84,9 @@ function SceneContent({
   params, currentTime, showProjectionPlanes,
   showBasis, showIncomingWave, receiverYaw, receiverPitch,
   couplingStrength, morphProgress, prevMode,
+  showModemWorldEllipse, showModemReceiverBody, showModemReceiverAxes,
+  showModemGimbalRings, showModemMeasuredEllipse, showModemGhostTemplate,
+  showModemRecoveredEllipse, showModemHud,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
   // coupling metric so the main geometry visibly weakens with misalignment.
@@ -205,6 +217,14 @@ function SceneContent({
           params={effectiveParams}
           currentTime={currentTime}
           opacity={isTransitioning ? inOpacity : 1}
+          showWorldEllipse={showModemWorldEllipse}
+          showReceiverBody={showModemReceiverBody}
+          showReceiverAxes={showModemReceiverAxes}
+          showGimbalRings={showModemGimbalRings}
+          showMeasuredEllipse={showModemMeasuredEllipse}
+          showGhostTemplate={showModemGhostTemplate}
+          showRecoveredEllipse={showModemRecoveredEllipse}
+          showHud={showModemHud}
         />
       )}
 

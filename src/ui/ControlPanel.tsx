@@ -16,6 +16,15 @@ interface ControlPanelProps {
   receiverYaw: number;
   receiverPitch: number;
   sweepMode: SweepMode;
+  // ── Modem layer toggles (quaternionic mode) ─────────────────────────────
+  showModemWorldEllipse: boolean;
+  showModemReceiverBody: boolean;
+  showModemReceiverAxes: boolean;
+  showModemGimbalRings: boolean;
+  showModemMeasuredEllipse: boolean;
+  showModemGhostTemplate: boolean;
+  showModemRecoveredEllipse: boolean;
+  showModemHud: boolean;
   onParamsChange: (p: Partial<SignalParams>) => void;
   onAnimSpeedChange: (v: number) => void;
   onShowClassicalSplitChange: (v: boolean) => void;
@@ -29,6 +38,14 @@ interface ControlPanelProps {
   onShowIncomingWaveChange: (v: boolean) => void;
   onReceiverYawChange: (v: number) => void;
   onReceiverPitchChange: (v: number) => void;
+  onShowModemWorldEllipseChange: (v: boolean) => void;
+  onShowModemReceiverBodyChange: (v: boolean) => void;
+  onShowModemReceiverAxesChange: (v: boolean) => void;
+  onShowModemGimbalRingsChange: (v: boolean) => void;
+  onShowModemMeasuredEllipseChange: (v: boolean) => void;
+  onShowModemGhostTemplateChange: (v: boolean) => void;
+  onShowModemRecoveredEllipseChange: (v: boolean) => void;
+  onShowModemHudChange: (v: boolean) => void;
 }
 
 interface SliderProps {
@@ -81,6 +98,19 @@ function LayerToggle({ label, active, onToggle, title }: LayerToggleProps) {
   );
 }
 
+/** Compact grid-cell button used in the 4×2 layers grid. */
+function LayerGridBtn({ label, active, onToggle, title }: LayerToggleProps) {
+  return (
+    <button
+      className={`layer-grid-btn ${active ? 'active' : ''}`}
+      onClick={onToggle}
+      title={title}
+    >
+      {label}
+    </button>
+  );
+}
+
 /** Labels shown per mode in the basis toggle tooltip. */
 const BASIS_TITLES: Record<DemoMode, string> = {
   complex:      'Show Re/Im projection lines onto the real and imaginary axes',
@@ -95,27 +125,37 @@ export function ControlPanel({
   showProjectionPlanes,
   showBasis,
   showTrailHistory,
-  showFiber,
-  showLocalFrame,
   showSpectrumPanel,
-  showProjectionShadow,
   showIncomingWave,
   receiverYaw,
   receiverPitch,
   sweepMode,
+  showModemWorldEllipse,
+  showModemReceiverBody,
+  showModemReceiverAxes,
+  showModemGimbalRings,
+  showModemMeasuredEllipse,
+  showModemGhostTemplate,
+  showModemRecoveredEllipse,
+  showModemHud,
   onParamsChange,
   onAnimSpeedChange,
   onShowClassicalSplitChange,
   onShowProjectionPlanesChange,
   onShowBasisChange,
   onShowTrailHistoryChange,
-  onShowFiberChange,
-  onShowLocalFrameChange,
   onShowSpectrumPanelChange,
-  onShowProjectionShadowChange,
   onShowIncomingWaveChange,
   onReceiverYawChange,
   onReceiverPitchChange,
+  onShowModemWorldEllipseChange,
+  onShowModemReceiverBodyChange,
+  onShowModemReceiverAxesChange,
+  onShowModemGimbalRingsChange,
+  onShowModemMeasuredEllipseChange,
+  onShowModemGhostTemplateChange,
+  onShowModemRecoveredEllipseChange,
+  onShowModemHudChange,
 }: ControlPanelProps) {
   const orientationLocked = sweepMode === 'phase-only' || sweepMode === 'geometry-only';
   const phaseLocked = sweepMode === 'geometry-only';
@@ -175,60 +215,95 @@ export function ControlPanel({
       {/* ── Layer visibility — scene elements can be isolated for focused study ── */}
       <div className="control-section">
         <h4>Layers</h4>
-        <LayerToggle
-          label="Basis"
-          active={showBasis}
-          onToggle={() => onShowBasisChange(!showBasis)}
-          title={BASIS_TITLES[params.demoMode]}
-        />
-        {params.demoMode !== 'complex' && (
-          <LayerToggle
-            label="Trail History"
-            active={showTrailHistory}
-            onToggle={() => onShowTrailHistoryChange(!showTrailHistory)}
-            title="Show the temporal trail / 3D helix path of the signal"
-          />
+        {params.demoMode === 'quaternionic' ? (
+          /* Modem-specific 4×2 grid — one button per visual component */
+          <div className="layers-grid">
+            <LayerGridBtn
+              label="TX Ellipse"
+              active={showModemWorldEllipse}
+              onToggle={() => onShowModemWorldEllipseChange(!showModemWorldEllipse)}
+              title="Show the world-truth amber ellipse (transmitted polarization symbol)"
+            />
+            <LayerGridBtn
+              label="RX Body"
+              active={showModemReceiverBody}
+              onToggle={() => onShowModemReceiverBodyChange(!showModemReceiverBody)}
+              title="Show the gold icosahedron receiver body and sensing-plane ring"
+            />
+            <LayerGridBtn
+              label="RX Axes"
+              active={showModemReceiverAxes}
+              onToggle={() => onShowModemReceiverAxesChange(!showModemReceiverAxes)}
+              title="Show the receiver sensing axes (r1 amber I-ch, r2 purple Q-ch, n forward)"
+            />
+            <LayerGridBtn
+              label="Gimbal"
+              active={showModemGimbalRings}
+              onToggle={() => onShowModemGimbalRingsChange(!showModemGimbalRings)}
+              title="Show the three gyroscopic gimbal rings (YZ / XZ / XY planes)"
+            />
+            <LayerGridBtn
+              label="Measured"
+              active={showModemMeasuredEllipse}
+              onToggle={() => onShowModemMeasuredEllipseChange(!showModemMeasuredEllipse)}
+              title="Show the cyan measured ellipse (receiver-local projection of transmitted signal)"
+            />
+            <LayerGridBtn
+              label="Ghost"
+              active={showModemGhostTemplate}
+              onToggle={() => onShowModemGhostTemplateChange(!showModemGhostTemplate)}
+              title="Show the white canonical template ghost (ideal recovery target)"
+            />
+            <LayerGridBtn
+              label="Recovered"
+              active={showModemRecoveredEllipse}
+              onToggle={() => onShowModemRecoveredEllipseChange(!showModemRecoveredEllipse)}
+              title="Show the green recovered ellipse (symbol after inverse quaternion alignment)"
+            />
+            <LayerGridBtn
+              label="HUD"
+              active={showModemHud}
+              onToggle={() => onShowModemHudChange(!showModemHud)}
+              title="Show the compact modem readout / status HUD"
+            />
+          </div>
+        ) : (
+          /* Non-modem modes: generic layer toggles in a 4×2 grid */
+          <div className="layers-grid">
+            <LayerGridBtn
+              label="Basis"
+              active={showBasis}
+              onToggle={() => onShowBasisChange(!showBasis)}
+              title={BASIS_TITLES[params.demoMode]}
+            />
+            {params.demoMode !== 'complex' ? (
+              <LayerGridBtn
+                label="Trail"
+                active={showTrailHistory}
+                onToggle={() => onShowTrailHistoryChange(!showTrailHistory)}
+                title="Show the temporal trail / 3D helix path of the signal"
+              />
+            ) : <span />}
+            <LayerGridBtn
+              label="Projections"
+              active={showProjectionPlanes}
+              onToggle={() => onShowProjectionPlanesChange(!showProjectionPlanes)}
+              title="Show XY and XZ projection planes — classical 2D slices of the full geometric state"
+            />
+            <LayerGridBtn
+              label="Spectrum"
+              active={showSpectrumPanel}
+              onToggle={() => onShowSpectrumPanelChange(!showSpectrumPanel)}
+              title="Show the coefficient / spectrum panel"
+            />
+            <LayerGridBtn
+              label="Wave"
+              active={showIncomingWave}
+              onToggle={() => onShowIncomingWaveChange(!showIncomingWave)}
+              title="Show the incoming electromagnetic wave arriving directly at the geometric representation"
+            />
+          </div>
         )}
-        <LayerToggle
-          label="Projections"
-          active={showProjectionPlanes}
-          onToggle={() => onShowProjectionPlanesChange(!showProjectionPlanes)}
-          title="Show XY and XZ projection planes — classical 2D slices of the full geometric state"
-        />
-        {params.demoMode === 'quaternionic' && (
-          <>
-            <LayerToggle
-              label="Fiber Rings"
-              active={showFiber}
-              onToggle={() => onShowFiberChange(!showFiber)}
-              title="Show fiber circles along the trail — each encodes a hidden S¹ fiber (Hopf fibration concept)"
-            />
-            <LayerToggle
-              label="Local Frame"
-              active={showLocalFrame}
-              onToggle={() => onShowLocalFrameChange(!showLocalFrame)}
-              title="Show the local quaternion orientation frame (i, j, k axes) at the signal tip"
-            />
-            <LayerToggle
-              label="Projection Shadow"
-              active={showProjectionShadow}
-              onToggle={() => onShowProjectionShadowChange(!showProjectionShadow)}
-              title="Show the XY-plane projection of the quaternionic orbit — the classical shadow that reveals how the full state projects down to a familiar planar signal"
-            />
-          </>
-        )}
-        <LayerToggle
-          label="Spectrum"
-          active={showSpectrumPanel}
-          onToggle={() => onShowSpectrumPanelChange(!showSpectrumPanel)}
-          title="Show the coefficient / spectrum panel"
-        />
-        <LayerToggle
-          label="Incoming Wave"
-          active={showIncomingWave}
-          onToggle={() => onShowIncomingWaveChange(!showIncomingWave)}
-          title="Show the incoming electromagnetic wave arriving directly at the geometric representation, and how the field is encoded into the current sensing frame"
-        />
       </div>
 
       {/* ── Sensing Frame Orientation — shown only when the incoming wave layer is active ── */}
