@@ -33,14 +33,14 @@ interface MainSceneProps {
   /** The mode we are transitioning away from. */
   prevMode: DemoMode;
   // ── Modem layer visibility toggles (quaternionic mode only) ──────────────
-  showModemWorldEllipse: boolean;
-  showModemReceiverBody: boolean;
-  showModemReceiverAxes: boolean;
   showModemGimbalRings: boolean;
   showModemMeasuredEllipse: boolean;
-  showModemGhostTemplate: boolean;
   showModemRecoveredEllipse: boolean;
   showModemHud: boolean;
+  // ── Advanced / Math overlays (off by default) ─────────────────────────────
+  showModemWorldEllipse: boolean;
+  showModemReceiverAxes: boolean;
+  showModemGhostTemplate: boolean;
 }
 
 /** Target camera positions per mode — emphasise the conceptual geometry of each. */
@@ -84,9 +84,9 @@ function SceneContent({
   params, currentTime, showProjectionPlanes,
   showBasis, showIncomingWave, receiverYaw, receiverPitch,
   couplingStrength, morphProgress, prevMode,
-  showModemWorldEllipse, showModemReceiverBody, showModemReceiverAxes,
-  showModemGimbalRings, showModemMeasuredEllipse, showModemGhostTemplate,
+  showModemGimbalRings, showModemMeasuredEllipse,
   showModemRecoveredEllipse, showModemHud,
+  showModemWorldEllipse, showModemReceiverAxes, showModemGhostTemplate,
 }: MainSceneProps) {
   // When the incoming wave layer is active, scale the signal amplitude by the
   // coupling metric so the main geometry visibly weakens with misalignment.
@@ -217,14 +217,13 @@ function SceneContent({
           params={effectiveParams}
           currentTime={currentTime}
           opacity={isTransitioning ? inOpacity : 1}
-          showWorldEllipse={showModemWorldEllipse}
-          showReceiverBody={showModemReceiverBody}
-          showReceiverAxes={showModemReceiverAxes}
           showGimbalRings={showModemGimbalRings}
           showMeasuredEllipse={showModemMeasuredEllipse}
-          showGhostTemplate={showModemGhostTemplate}
           showRecoveredEllipse={showModemRecoveredEllipse}
           showHud={showModemHud}
+          showWorldEllipse={showModemWorldEllipse}
+          showReceiverAxes={showModemReceiverAxes}
+          showGhostTemplate={showModemGhostTemplate}
         />
       )}
 

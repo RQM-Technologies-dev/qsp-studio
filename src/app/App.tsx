@@ -40,14 +40,14 @@ export default function App() {
   const [showIncomingWave, setShowIncomingWave] = useState(true);
 
   // ── Quaternionic Modem layer visibility toggles ─────────────────────────
-  const [showModemWorldEllipse,    setShowModemWorldEllipse]    = useState(true);
-  const [showModemReceiverBody,    setShowModemReceiverBody]    = useState(true);
-  const [showModemReceiverAxes,    setShowModemReceiverAxes]    = useState(true);
   const [showModemGimbalRings,     setShowModemGimbalRings]     = useState(true);
   const [showModemMeasuredEllipse, setShowModemMeasuredEllipse] = useState(true);
-  const [showModemGhostTemplate,   setShowModemGhostTemplate]   = useState(true);
   const [showModemRecoveredEllipse, setShowModemRecoveredEllipse] = useState(true);
   const [showModemHud,             setShowModemHud]             = useState(true);
+  // ── Advanced / Math overlays (off by default) ─────────────────────────────
+  const [showModemWorldEllipse,    setShowModemWorldEllipse]    = useState(false);
+  const [showModemReceiverAxes,    setShowModemReceiverAxes]    = useState(false);
+  const [showModemGhostTemplate,   setShowModemGhostTemplate]   = useState(false);
 
   // ── Receiver orientation (yaw = Y-axis rotation, pitch = X-axis rotation) ─
   const [receiverYaw,   setReceiverYaw]   = useState(0);
@@ -261,14 +261,13 @@ export default function App() {
           couplingStrength={couplingStrength}
           morphProgress={morphProgress}
           prevMode={prevMode}
-          showModemWorldEllipse={showModemWorldEllipse}
-          showModemReceiverBody={showModemReceiverBody}
-          showModemReceiverAxes={showModemReceiverAxes}
           showModemGimbalRings={showModemGimbalRings}
           showModemMeasuredEllipse={showModemMeasuredEllipse}
-          showModemGhostTemplate={showModemGhostTemplate}
           showModemRecoveredEllipse={showModemRecoveredEllipse}
           showModemHud={showModemHud}
+          showModemWorldEllipse={showModemWorldEllipse}
+          showModemReceiverAxes={showModemReceiverAxes}
+          showModemGhostTemplate={showModemGhostTemplate}
         />
         <InfoOverlay demoMode={params.demoMode} showIncomingWave={showIncomingWave} />
         {showSpectrumPanel && (
@@ -294,14 +293,13 @@ export default function App() {
         receiverYaw={receiverYaw}
         receiverPitch={receiverPitch}
         sweepMode={sweepMode}
-        showModemWorldEllipse={showModemWorldEllipse}
-        showModemReceiverBody={showModemReceiverBody}
-        showModemReceiverAxes={showModemReceiverAxes}
         showModemGimbalRings={showModemGimbalRings}
         showModemMeasuredEllipse={showModemMeasuredEllipse}
-        showModemGhostTemplate={showModemGhostTemplate}
         showModemRecoveredEllipse={showModemRecoveredEllipse}
         showModemHud={showModemHud}
+        showModemWorldEllipse={showModemWorldEllipse}
+        showModemReceiverAxes={showModemReceiverAxes}
+        showModemGhostTemplate={showModemGhostTemplate}
         onParamsChange={handleParamsChange}
         onAnimSpeedChange={setAnimSpeed}
         onShowClassicalSplitChange={setShowClassicalSplit}
@@ -315,14 +313,13 @@ export default function App() {
         onShowIncomingWaveChange={setShowIncomingWave}
         onReceiverYawChange={setReceiverYaw}
         onReceiverPitchChange={setReceiverPitch}
-        onShowModemWorldEllipseChange={setShowModemWorldEllipse}
-        onShowModemReceiverBodyChange={setShowModemReceiverBody}
-        onShowModemReceiverAxesChange={setShowModemReceiverAxes}
         onShowModemGimbalRingsChange={setShowModemGimbalRings}
         onShowModemMeasuredEllipseChange={setShowModemMeasuredEllipse}
-        onShowModemGhostTemplateChange={setShowModemGhostTemplate}
         onShowModemRecoveredEllipseChange={setShowModemRecoveredEllipse}
         onShowModemHudChange={setShowModemHud}
+        onShowModemWorldEllipseChange={setShowModemWorldEllipse}
+        onShowModemReceiverAxesChange={setShowModemReceiverAxes}
+        onShowModemGhostTemplateChange={setShowModemGhostTemplate}
       />
     </div>
   );
